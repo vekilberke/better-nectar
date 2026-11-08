@@ -1,0 +1,347 @@
+import { StrictMode, useState, useEffect } from "react";
+import { createRoot } from "react-dom/client";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { Effect, EffectState } from "@tauri-apps/api/window";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { Settings, Palette, PanelTop, Monitor, Layers, Info, Smartphone } from "lucide-react";
+import { WindowControls } from "./components/WindowControls";
+import {
+  useSettings,
+  GeneralTab,
+  AppearanceTab,
+  NotchTab,
+  CalendarSyncPage,
+  DockTab,
+  OverlaysTab,
+  AboutTab,
+  PhoneLinkTab,
+} from "./settings/index";
+import type { SettingsTab } from "./settings/index";
+import { initTheme } from "./theme";
+import { useT } from "./i18n";
+import "./Settings.css";
+
+const appWindow = getCurrentWebviewWindow();
+
+const TABS: { id: SettingsTab; labelKey: string; icon: typeof Settings }[] = [
+  { id: "general", labelKey: "tabs.general", icon: Settings },
+  { id: "appearance", labelKey: "tabs.appearance", icon: Palette },
+  { id: "notch", labelKey: "tabs.notch", icon: PanelTop },
+  { id: "dock", labelKey: "tabs.dock", icon: Monitor },
+  { id: "overlays", labelKey: "tabs.overlays", icon: Layers },
+  { id: "phone", labelKey: "tabs.phone", icon: Smartphone },
+  { id: "about", labelKey: "tabs.about", icon: Info },
+];
+
+function SettingsApp() {
+  const t = useT();
+  const [activeTab, setActiveTab] = useState<SettingsTab>("general");
+  const settings = useSettings();
+
+  useEffect(() => {
+    return initTheme();
+  }, []);
+
+  useEffect(() => {
+    const unlisten = listen<string>("settings-navigate", (e) => {
+      if (e.payload === "calendar-sync") setActiveTab("calendar-sync");
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
+
+  useEffect(() => {
+    const preventContext = (e: MouseEvent) => e.preventDefault();
+    document.addEventListener("contextmenu", preventContext as any);
+
+    appWindow.setEffects({ effects: [Effect.Acrylic], state: EffectState.Active, color: [10, 10, 15, 20] }).catch(() => {})
+      .finally(() => {
+      requestAnimationFrame(() => requestAnimationFrame(() => invoke("on_demand_window_ready").catch(() => {})));
+    });
+
+    return () => {
+      document.removeEventListener("contextmenu", preventContext as any);
+    };
+  }, []);
+
+  useEffect(() => {
+    invoke("resize_settings_window", {
+      width: 620 * settings.scale,
+      height: 480 * settings.scale,
+    }).catch(console.error);
+  }, [settings.scale]);
+
+  return (
+    <div className="settings-container" style={{ zoom: settings.scale }}>
+      <div className="title-bar" data-tauri-drag-region>
+        <span className="title-text" data-tauri-drag-region>
+          {t("settings.title")}
+        </span>
+        <WindowControls />
+      </div>
+
+      <div className="settings-body">
+        <div className="settings-sidebar">
+          {TABS.map(({ id, labelKey, icon: Icon }) => (
+            <button
+              key={id}
+              className={`sidebar-tab ${activeTab === id || (id === "notch" && activeTab === "calendar-sync") ? "active" : ""}`}
+              onClick={() => setActiveTab(id)}
+            >
+              <div className="sidebar-tab-icon">
+                <Icon size={14} strokeWidth={1.5} />
+              </div>
+              <span>{t(labelKey)}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="settings-content">
+          {activeTab === "general" && (
+            <GeneralTab
+              autostart={settings.autostart}
+              weekStart={settings.weekStart}
+              changeWeekStart={settings.changeWeekStart}
+              toggleAutostart={settings.toggleAutostart}
+              timeFormat24h={settings.timeFormat24h}
+              toggleTimeFormat24h={settings.toggleTimeFormat24h}
+              legacyMode={settings.legacyMode}
+              toggleLegacyMode={settings.toggleLegacyMode}
+              showUpdateIndicator={settings.showUpdateIndicator}
+              toggleUpdateIndicator={settings.toggleUpdateIndicator}
+              updatesOff={settings.updateStatus === "disabled"}
+              ramSaver={settings.ramSaver}
+              toggleRamSaver={settings.toggleRamSaver}
+              ramUltra={settings.ramUltra}
+              toggleRamUltra={settings.toggleRamUltra}
+              lowBatteryThreshold={settings.lowBatteryThreshold}
+              hasBattery={settings.hasBattery}
+              handleThresholdChange={settings.handleThresholdChange}
+              restartNectar={settings.restartNectar}
+              quitNectar={settings.quitNectar}
+            />
+          )}
+          {activeTab === "appearance" && (
+            <AppearanceTab
+              themeMode={settings.themeMode}
+              handleThemeModeChange={settings.handleThemeModeChange}
+              themeColor={settings.themeColor}
+              handleThemeColorChange={settings.handleThemeColorChange}
+              themeOpacity={settings.themeOpacity}
+              handleOpacityChange={settings.handleOpacityChange}
+              themeSaturation={settings.themeSaturation}
+              handleSaturationChange={settings.handleSaturationChange}
+              themeBrightness={settings.themeBrightness}
+              handleBrightnessChange={settings.handleBrightnessChange}
+              themeStyle={settings.themeStyle}
+              handleThemeStyleChange={settings.handleThemeStyleChange}
+              themeAccent={settings.themeAccent}
+              handleAccentChange={settings.handleAccentChange}
+              themeAccentColor={settings.themeAccentColor}
+              handleAccentColorChange={settings.handleAccentColorChange}
+              applyThemePreset={settings.applyThemePreset}
+              legacyMode={settings.legacyMode}
+              cornersEnabled={settings.cornersEnabled}
+              toggleCorners={settings.toggleCorners}
+              scale={settings.scale}
+              handleScaleChange={settings.handleScaleChange}
+            />
+          )}
+          {activeTab === "calendar-sync" && <CalendarSyncPage onBack={() => setActiveTab("notch")} />}
+          {activeTab === "notch" && (
+            <NotchTab
+              onOpenCalendarSync={() => setActiveTab("calendar-sync")}
+              notchMode={settings.notchMode}
+              setNotchModeValue={settings.setNotchModeValue}
+              monitors={settings.monitors}
+              notchMonitorMode={settings.notchMonitorMode}
+              setNotchMonitorModeValue={settings.setNotchMonitorModeValue}
+              notchMonitorId={settings.notchMonitorId}
+              setNotchMonitorIdValue={settings.setNotchMonitorIdValue}
+              notchModeByMonitor={settings.notchModeByMonitor}
+              setNotchModeForMonitor={settings.setNotchModeForMonitor}
+              replaceNotchModes={settings.replaceNotchModesByMonitor}
+              calendarEnabled={settings.calendarEnabled}
+              toggleCalendar={settings.toggleCalendar}
+              timerEnabled={settings.timerEnabled}
+              toggleTimerEnabled={settings.toggleTimerEnabled}
+              timerSoundEnabled={settings.timerSoundEnabled}
+              toggleTimerSound={settings.toggleTimerSound}
+              notchTimerProgress={settings.notchTimerProgress}
+              toggleNotchTimerProgress={settings.toggleNotchTimerProgress}
+              stopwatchEnabled={settings.stopwatchEnabled}
+              toggleStopwatchEnabled={settings.toggleStopwatchEnabled}
+              legacyMode={settings.legacyMode}
+              dualClockEnabled={settings.dualClockEnabled}
+              toggleDualClock={settings.toggleDualClock}
+              dualClockZone={settings.dualClockZone}
+              dualClockLabel={settings.dualClockLabel}
+              selectDualClockZone={settings.selectDualClockZone}
+              notchIdle={settings.notchIdle}
+              changeNotchIdle={settings.changeNotchIdle}
+              catPalette={settings.catPalette}
+              changeCatPalette={settings.changeCatPalette}
+              catClaude={settings.catClaude}
+              toggleCatClaude={settings.toggleCatClaude}
+              musicModeEnabled={settings.musicModeEnabled}
+              toggleMusicMode={settings.toggleMusicMode}
+              musicCompactNotch={settings.musicCompactNotch}
+              toggleMusicCompactNotch={settings.toggleMusicCompactNotch}
+              mediaLayout={settings.mediaLayout}
+              toggleMediaLayout={settings.toggleMediaLayout}
+              mediaAmbienceEnabled={settings.mediaAmbienceEnabled}
+              toggleAmbience={settings.toggleAmbience}
+              mediaCompactGlowEnabled={settings.mediaCompactGlowEnabled}
+              toggleCompactGlow={settings.toggleCompactGlow}
+              artworkThemeEnabled={settings.mediaArtworkThemeEnabled}
+              toggleArtworkTheme={settings.toggleArtworkTheme}
+              agentApi={settings.agentApi}
+              toggleAgentApi={settings.toggleAgentApi}
+              claudeUsage={settings.claudeUsage}
+              toggleClaudeUsage={settings.toggleClaudeUsage}
+              agentStyle={settings.agentStyle}
+              changeAgentStyle={settings.changeAgentStyle}
+              notchScrollVolume={settings.notchScrollVolume}
+              toggleNotchScrollVolume={settings.toggleNotchScrollVolume}
+              shelfPersist={settings.shelfPersist}
+              toggleShelfPersist={settings.toggleShelfPersist}
+              rememberMode={settings.rememberMode}
+              toggleRememberMode={settings.toggleRememberMode}
+              hoverOpen={settings.hoverOpen}
+              toggleHoverOpen={settings.toggleHoverOpen}
+              hoverPanel={settings.hoverPanel}
+              changeHoverPanel={settings.changeHoverPanel}
+              panelControlCenter={settings.panelControlCenter}
+              togglePanelControlCenter={settings.togglePanelControlCenter}
+              panelShelf={settings.panelShelf}
+              togglePanelShelf={settings.togglePanelShelf}
+              panelClipboard={settings.panelClipboard}
+              togglePanelClipboard={settings.togglePanelClipboard}
+              clipboardSize={settings.clipboardSize}
+              changeClipboardSize={settings.changeClipboardSize}
+              clipboardPersist={settings.clipboardPersist}
+              toggleClipboardPersist={settings.toggleClipboardPersist}
+              panelOrder={settings.panelOrder}
+              reorderPanels={settings.reorderPanels}
+              resetPanelOrder={settings.resetPanelOrder}
+              ccLayout={settings.ccLayout}
+              changeCcLayout={settings.changeCcLayout}
+              resetCcLayout={settings.resetCcLayout}
+              weatherEnabled={settings.weatherEnabled}
+              toggleWeather={settings.toggleWeather}
+              tempUnitFahrenheit={settings.tempUnitFahrenheit}
+              toggleTempUnit={settings.toggleTempUnit}
+              cityName={settings.cityName}
+              cityQuery={settings.cityQuery}
+              setCityQuery={settings.setCityQuery}
+              citySearchResults={settings.citySearchResults}
+              showCityDropdown={settings.showCityDropdown}
+              setShowCityDropdown={settings.setShowCityDropdown}
+              selectCity={settings.selectCity}
+              handleCityClear={settings.handleCityClear}
+              statusWidgets={settings.statusWidgets}
+              handleWidgetsChange={settings.handleWidgetsChange}
+              hasBattery={settings.hasBattery}
+            />
+          )}
+          {activeTab === "dock" && (
+            <DockTab
+              dockEnabled={settings.dockEnabled}
+              toggleDock={settings.toggleDock}
+              dockMode={settings.dockMode}
+              setDockModeValue={settings.setDockModeValue}
+              dockPreviewEnabled={settings.dockPreviewEnabled}
+              toggleDockPreview={settings.toggleDockPreview}
+              dockAttentionEnabled={settings.dockAttentionEnabled}
+              toggleDockAttention={settings.toggleDockAttention}
+              dockConsoleWindows={settings.dockConsoleWindows}
+              toggleDockConsoleWindows={settings.toggleDockConsoleWindows}
+              dockSearchEnabled={settings.dockSearchEnabled}
+              toggleDockSearch={settings.toggleDockSearch}
+              dockSearchProvider={settings.dockSearchProvider}
+              handleDockSearchProviderChange={settings.handleDockSearchProviderChange}
+              dockSearchShortcut={settings.dockSearchShortcut}
+              handleDockSearchShortcutChange={settings.handleDockSearchShortcutChange}
+              dockCalendarEnabled={settings.dockCalendarEnabled}
+              toggleDockCalendar={settings.toggleDockCalendar}
+              legacyMode={settings.legacyMode}
+              dockTray={settings.dockTray}
+              toggleDockTray={settings.toggleDockTray}
+              dockTaskView={settings.dockTaskView}
+              toggleDockTaskView={settings.toggleDockTaskView}
+              dockShowDesktop={settings.dockShowDesktop}
+              toggleDockShowDesktop={settings.toggleDockShowDesktop}
+              dockRecycle={settings.dockRecycle}
+              toggleDockRecycle={settings.toggleDockRecycle}
+              dockDrives={settings.dockDrives}
+              toggleDockDrive={settings.toggleDockDrive}
+              hiddenDockApps={settings.hiddenDockApps}
+              restoreHiddenDockApp={settings.restoreHiddenDockApp}
+              dockIconOnly={settings.dockIconOnly}
+              toggleDockIconOnly={settings.toggleDockIconOnly}
+              dockAdaptive={settings.dockAdaptive}
+              toggleDockAdaptive={settings.toggleDockAdaptive}
+              startIcon={settings.startIcon}
+              handleStartIconChange={settings.handleStartIconChange}
+              dockWinNumberEnabled={settings.dockWinNumberEnabled}
+              toggleDockWinNumber={settings.toggleDockWinNumber}
+              dockMixedReorder={settings.dockMixedReorder}
+              toggleDockMixedReorder={settings.toggleDockMixedReorder}
+              monitors={settings.monitors}
+              dockMonitorMode={settings.dockMonitorMode}
+              setDockMonitorModeValue={settings.setDockMonitorModeValue}
+              dockMonitorId={settings.dockMonitorId}
+              setDockMonitorIdValue={settings.setDockMonitorIdValue}
+              dockModeByMonitor={settings.dockModeByMonitor}
+              setDockModeForMonitor={settings.setDockModeForMonitor}
+              replaceDockModes={settings.replaceDockModesByMonitor}
+            />
+          )}
+          {activeTab === "overlays" && (
+            <OverlaysTab
+              volumeOverlayEnabled={settings.volumeOverlayEnabled}
+              toggleVolumeOverlay={settings.toggleVolumeOverlay}
+              volumeEdgeEnabled={settings.volumeEdgeEnabled}
+              toggleVolumeEdge={settings.toggleVolumeEdge}
+              brightnessOverlayEnabled={settings.brightnessOverlayEnabled}
+              toggleBrightnessOverlay={settings.toggleBrightnessOverlay}
+              brightnessEdgeEnabled={settings.brightnessEdgeEnabled}
+              toggleBrightnessEdge={settings.toggleBrightnessEdge}
+            />
+          )}
+          {activeTab === "phone" && <PhoneLinkTab />}
+          {activeTab === "about" && (
+            <AboutTab
+              appVersion={settings.appVersion}
+              autoUpdate={settings.autoUpdate}
+              toggleAutoUpdate={settings.toggleAutoUpdate}
+              prereleaseChannel={settings.prereleaseChannel}
+              togglePrereleaseChannel={settings.togglePrereleaseChannel}
+              updateStatus={settings.updateStatus}
+              updateVersion={settings.updateVersion}
+              checkForUpdates={settings.checkForUpdates}
+              installUpdate={settings.installUpdate}
+              exportStatus={settings.exportStatus}
+              importStatus={settings.importStatus}
+              handleExportSettings={settings.handleExportSettings}
+              handleImportSettings={settings.handleImportSettings}
+              resetStatus={settings.resetStatus}
+              handleResetSettings={settings.handleResetSettings}
+              uninstallStatus={settings.uninstallStatus}
+              uninstallError={settings.uninstallError}
+              handleUninstallNectar={settings.handleUninstallNectar}
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+createRoot(document.getElementById("root") as HTMLElement).render(
+  <StrictMode>
+    <SettingsApp />
+  </StrictMode>
+);

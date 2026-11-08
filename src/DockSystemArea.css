@@ -1,0 +1,131 @@
+/* Right-hand system area of the dock: mini player, tray arrow, network, volume, clock, bell. */
+.dock-system-area {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: 2px;
+  color: var(--nectar-text, white);
+}
+
+.sys-divider {
+  width: 1px;
+  align-self: stretch;
+  margin: 6px 6px 6px 2px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.sys-media,
+.sys-cluster {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 2px;
+}
+
+.sys-cluster {
+  padding: 0 2px;
+}
+
+.sys-slot {
+  height: 36px;
+}
+
+.sys-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 32px;
+  padding: 0 6px;
+  box-sizing: border-box;
+  border-radius: 10px;
+  color: var(--nectar-text, white);
+  transition: background 0.15s ease, transform 0.15s ease;
+  -webkit-app-region: no-drag;
+  user-select: none;
+}
+
+.sys-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.sys-btn:active {
+  transform: scale(0.95);
+}
+
+/* Its flyout (network or sound menu) is open. */
+.sys-btn.sys-btn-open {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.sys-btn svg {
+  display: block;
+  stroke: currentColor;
+}
+
+.sys-btn.sys-art {
+  min-width: 32px;
+  padding: 0;
+}
+
+.sys-art img {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+.sys-art-fallback {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.14);
+  font-size: 14px;
+}
+
+.sys-btn.sys-clock {
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  padding: 0 8px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.1;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.sys-time {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.sys-date {
+  font-size: 10.5px;
+  opacity: 0.75;
+  white-space: nowrap;
+}
+
+/* Icon-only dock: drop the date line's weight, keep the layout tight. */
+.dock-icon-only .sys-btn {
+  min-width: 28px;
+  padding: 0 4px;
+}
+
+.light-mode .sys-divider {
+  background: rgba(0, 0, 0, 0.14);
+}
+
+.light-mode .sys-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.light-mode .sys-btn.sys-btn-open {
+  background: rgba(0, 0, 0, 0.1);
+}

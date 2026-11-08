@@ -1,0 +1,230 @@
+use std::sync::{atomic::{AtomicBool, AtomicU32, AtomicI64}, Mutex, OnceLock};
+use std::sync::mpsc::Sender;
+use std::collections::HashMap;
+use crate::types::{SystemCommand, IntRect, AppInfo};
+use tauri::{AppHandle, PhysicalPosition, PhysicalSize};
+
+pub static COMMAND_SENDER: OnceLock<Sender<SystemCommand>> = OnceLock::new();
+pub static NATIVE_TASKBAR_HIDDEN: AtomicBool = AtomicBool::new(false);
+/// Set first on every quit/restart path. Window calls while the webviews are torn down panic
+/// ("already mutably borrowed"), so hooks and loops stand down once it's set.
+pub static SHUTTING_DOWN: AtomicBool = AtomicBool::new(false);
+/// This launch follows a restart or a crash, so calendars should sync right away.
+pub static RELAUNCHED: AtomicBool = AtomicBool::new(false);
+pub static KEYBOARD_FOCUS_LABEL: Mutex<Option<String>> = Mutex::new(None);
+
+macro_rules! label_map {
+    ($fn_name:ident, $val_ty:ty) => {
+        pub fn $fn_name() -> &'static Mutex<HashMap<String, $val_ty>> {
+            static CELL: OnceLock<Mutex<HashMap<String, $val_ty>>> = OnceLock::new();
+            CELL.get_or_init(|| Mutex::new(HashMap::new()))
+        }
+    };
+}
+
+label_map!(dock_rects, IntRect);
+label_map!(notch_rects, IntRect);
+label_map!(dock_hovered, bool);
+label_map!(notch_hovered, bool);
+// Frontend says the notch is off screen (smart/peek), keep it click-through then.
+label_map!(notch_hidden, bool);
+// A fullscreen window covers this notch's monitor.
+label_map!(notch_fullscreen, bool);
+// Top edge hover intent: when the cursor entered the band, and whether it rested long enough.
+label_map!(notch_edge_enter_ms, i64);
+label_map!(notch_edge_armed, bool);
+label_map!(dock_overlap, i32);
+label_map!(notch_overlap, i32);
+label_map!(dock_window_rects, (PhysicalPosition<i32>, PhysicalSize<u32>));
+label_map!(main_window_rects, (PhysicalPosition<i32>, PhysicalSize<u32>));
+label_map!(dock_appbar_registered, bool);
+// Open dock flyout (network or sound menu): its CSS rect in that dock window and the window's scale.
+label_map!(dock_flyouts, (IntRect, f64));
+label_map!(main_appbar_registered, bool);
+// Dock window is in hybrid mode (T-018).
+label_map!(dock_hybrid, bool);
+
+label_map!(dock_extra_last_ignore, i32);
+label_map!(notch_extra_last_ignore, i32);
+label_map!(dock_extra_last_edge_hover, i32);
+label_map!(notch_extra_last_edge_hover, i32);
+label_map!(dock_extra_expiry_ms, i64);
+label_map!(notch_extra_expiry_ms, i64);
+
+pub fn get_flag(map: &'static Mutex<HashMap<String, bool>>, label: &str) -> bool {
+    map.lock().ok().and_then(|m| m.get(label).copied()).unwrap_or(false)
+}
+
+pub fn set_flag(map: &'static Mutex<HashMap<String, bool>>, label: &str, value: bool) {
+    if let Ok(mut m) = map.lock() {
+        m.insert(label.to_string(), value);
+    }
+}
+
+pub fn get_overlap(map: &'static Mutex<HashMap<String, i32>>, label: &str) -> i32 {
+    map.lock().ok().and_then(|m| m.get(label).copied()).unwrap_or(-1)
+}
+
+pub fn set_overlap(map: &'static Mutex<HashMap<String, i32>>, label: &str, value: i32) {
+    if let Ok(mut m) = map.lock() {
+        m.insert(label.to_string(), value);
+    }
+}
+
+pub fn get_i32(map: &'static Mutex<HashMap<String, i32>>, label: &str, default: i32) -> i32 {
+    map.lock().ok().and_then(|m| m.get(label).copied()).unwrap_or(default)
+}
+
+pub fn set_i32(map: &'static Mutex<HashMap<String, i32>>, label: &str, value: i32) {
+    if let Ok(mut m) = map.lock() {
+        m.insert(label.to_string(), value);
+    }
+}
+
+pub fn get_i64(map: &'static Mutex<HashMap<String, i64>>, label: &str, default: i64) -> i64 {
+    map.lock().ok().and_then(|m| m.get(label).copied()).unwrap_or(default)
+}
+
+pub fn set_i64(map: &'static Mutex<HashMap<String, i64>>, label: &str, value: i64) {
+    if let Ok(mut m) = map.lock() {
+        m.insert(label.to_string(), value);
+    }
+}
+
+/// Forgets the flyout open in dock `label` (closed, window gone, or page reloaded).
+pub fn clear_dock_flyout(label: &str) {
+    if let Ok(mut m) = dock_flyouts().lock() {
+        m.remove(label);
+        DOCK_FLYOUT_OPEN.store(!m.is_empty(), std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+pub fn clear_window_state(label: &str) {
+    if let Ok(mut m) = dock_rects().lock() { m.remove(label); }
+    if let Ok(mut m) = notch_rects().lock() { m.remove(label); }
+    if let Ok(mut m) = dock_hovered().lock() { m.remove(label); }
+    if let Ok(mut m) = notch_hovered().lock() { m.remove(label); }
+    if let Ok(mut m) = notch_hidden().lock() { m.remove(label); }
+    if let Ok(mut m) = notch_fullscreen().lock() { m.remove(label); }
+    if let Ok(mut m) = notch_edge_enter_ms().lock() { m.remove(label); }
+    if let Ok(mut m) = notch_edge_armed().lock() { m.remove(label); }
+    if let Ok(mut m) = dock_overlap().lock() { m.remove(label); }
+    if let Ok(mut m) = notch_overlap().lock() { m.remove(label); }
+    if let Ok(mut m) = dock_window_rects().lock() { m.remove(label); }
+    if let Ok(mut m) = main_window_rects().lock() { m.remove(label); }
+    if let Ok(mut m) = dock_appbar_registered().lock() { m.remove(label); }
+    clear_dock_flyout(label);
+    if let Ok(mut m) = main_appbar_registered().lock() { m.remove(label); }
+    if let Ok(mut m) = dock_extra_last_ignore().lock() { m.remove(label); }
+    if let Ok(mut m) = notch_extra_last_ignore().lock() { m.remove(label); }
+    if let Ok(mut m) = dock_extra_last_edge_hover().lock() { m.remove(label); }
+    if let Ok(mut m) = notch_extra_last_edge_hover().lock() { m.remove(label); }
+    if let Ok(mut m) = dock_extra_expiry_ms().lock() { m.remove(label); }
+    if let Ok(mut m) = notch_extra_expiry_ms().lock() { m.remove(label); }
+    let was_hybrid = dock_hybrid().lock().ok().and_then(|mut m| m.remove(label)).is_some();
+    if was_hybrid { crate::dock_hybrid::update_active(); }
+}
+
+pub fn dock_label_for_monitor(monitor_id: &str) -> String {
+    format!("dock-{monitor_id}")
+}
+
+pub fn notch_label_for_monitor(monitor_id: &str) -> String {
+    format!("main-{monitor_id}")
+}
+
+pub fn is_dock_label(label: &str) -> bool {
+    label == "dock" || label.starts_with("dock-")
+}
+
+pub fn is_notch_label(label: &str) -> bool {
+    label == "main" || label.starts_with("main-")
+}
+
+pub fn monitor_suffix(label: &str) -> Option<&str> {
+    label.split_once('-').map(|(_, id)| id)
+}
+
+pub static MONITOR_SYNC_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
+
+pub static MENU_IS_OPEN: AtomicBool = AtomicBool::new(false);
+pub static MENU_RECT: Mutex<Option<IntRect>> = Mutex::new(None);
+pub static DOCK_IS_DRAGGING: AtomicBool = AtomicBool::new(false);
+/// Any dock flyout is open. The mouse and keyboard hooks only look further while this is set.
+pub static DOCK_FLYOUT_OPEN: AtomicBool = AtomicBool::new(false);
+pub static DOCK_FLYOUT_APP: OnceLock<AppHandle> = OnceLock::new();
+pub static ICON_CACHE: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
+
+pub static INSTALLED_APPS_CACHE: OnceLock<Mutex<Vec<AppInfo>>> = OnceLock::new();
+pub static IS_SCANNING: AtomicBool = AtomicBool::new(false);
+
+pub static BRIGHTNESS_SENDER: OnceLock<Sender<u32>> = OnceLock::new();
+pub static CURRENT_BRIGHTNESS: AtomicU32 = AtomicU32::new(50);
+pub static CURRENT_VOLUME: AtomicU32 = AtomicU32::new(50);
+pub static LAST_BRIGHTNESS_CHANGE: AtomicI64 = AtomicI64::new(0);
+pub static ANY_MEDIA_PLAYING: AtomicBool = AtomicBool::new(false);
+pub static LAST_START_TOGGLE_MS: AtomicI64 = AtomicI64::new(0);
+pub static OVERLAY_IN_SPLASH: AtomicBool = AtomicBool::new(false);
+pub static CURRENT_FOREGROUND_FULLSCREEN: AtomicBool = AtomicBool::new(false);
+pub static CURRENT_FOREGROUND_FULLSCREEN_ON_DOCK: AtomicBool = AtomicBool::new(false);
+pub static CURRENT_FOREGROUND_SHELL_ON_DOCK: AtomicBool = AtomicBool::new(false);
+pub static CURRENT_FOREGROUND_MAXIMIZED: AtomicBool = AtomicBool::new(false);
+
+pub static SINGLE_INSTANCE_MUTEX_HANDLE: OnceLock<isize> = OnceLock::new();
+pub static SINGLE_INSTANCE_EVENT_HANDLE: OnceLock<isize> = OnceLock::new();
+
+pub fn close_single_instance_handles() {
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::Foundation::HANDLE;
+    if let Some(&h) = SINGLE_INSTANCE_MUTEX_HANDLE.get() {
+        if h != 0 {
+            unsafe { let _ = CloseHandle(HANDLE(h as *mut _)); }
+        }
+    }
+    if let Some(&h) = SINGLE_INSTANCE_EVENT_HANDLE.get() {
+        if h != 0 {
+            unsafe { let _ = CloseHandle(HANDLE(h as *mut _)); }
+        }
+    }
+}
+
+pub static DISPLAY_MONITOR_HANDLE: OnceLock<AppHandle> = OnceLock::new();
+pub static LAST_DISPLAY_CHANGE_MS: AtomicI64 = AtomicI64::new(0);
+
+/// Mixer panel bounds (x, y, w, h) in overlay CSS px, None when collapsed.
+pub static VOLUME_MIXER_RECT: Mutex<Option<(f64, f64, f64, f64)>> = Mutex::new(None);
+
+/// Exe path to friendly name (FileDescription). Cached since the mixer polls every 2s.
+pub static PROCESS_NAME_CACHE: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
+
+pub static THUMBNAIL_CACHE: OnceLock<Mutex<HashMap<isize, (String, i64)>>> = OnceLock::new();
+pub static FOCUS_TIMESTAMPS: OnceLock<Mutex<HashMap<isize, i64>>> = OnceLock::new();
+pub static SETTINGS_CACHE: OnceLock<Mutex<HashMap<String, serde_json::Value>>> = OnceLock::new();
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::Ordering;
+
+    #[test]
+    fn dock_labels_and_flyout_flag_follow_the_open_set() {
+        assert!(is_dock_label("dock"));
+        assert!(is_dock_label("dock-2"));
+        assert!(!is_dock_label("main"));
+        assert!(!is_dock_label("overlay"));
+
+        let r = IntRect { x: 1, y: 2, width: 3, height: 4 };
+        {
+            let mut m = dock_flyouts().lock().unwrap();
+            m.insert("dock-test-a".into(), (r, 1.0));
+            m.insert("dock-test-b".into(), (r, 1.5));
+            DOCK_FLYOUT_OPEN.store(true, Ordering::Relaxed);
+        }
+        clear_dock_flyout("dock-test-a");
+        assert!(DOCK_FLYOUT_OPEN.load(Ordering::Relaxed), "another dock still has its flyout open");
+        clear_window_state("dock-test-b");
+        assert!(dock_flyouts().lock().unwrap().get("dock-test-b").is_none());
+        // A label that was never open is a no-op.
+        clear_dock_flyout("dock-test-never");
+    }
+}

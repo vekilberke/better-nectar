@@ -1,0 +1,67 @@
+/* Network and sound menus above the dock, styled like the notch's Control Center. */
+.dock-flyout-wrap {
+  position: fixed;
+  z-index: 9998;
+  /* Portaled to <body>, so take the notch's typography explicitly. */
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  white-space: nowrap;
+}
+
+.dock-flyout button,
+.dock-flyout input {
+  font-family: inherit;
+}
+
+.dock-flyout {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-sizing: border-box;
+  padding: 12px;
+  border-radius: 18px;
+  background: var(--nectar-bg-expanded, rgba(0, 0, 0, 0.92));
+  backdrop-filter: blur(28px) saturate(1.4);
+  -webkit-backdrop-filter: blur(28px) saturate(1.4);
+  border: 1px solid var(--nectar-border, rgba(255, 255, 255, 0.1));
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  color: var(--nectar-text, white);
+  overflow: hidden;
+  user-select: none;
+}
+
+.dock-flyout input[type="password"] {
+  user-select: text;
+}
+
+/* Which tile's list is showing below. */
+.dock-flyout .cc-pill-tile.dfly-selected {
+  outline: 1.5px solid var(--nectar-border, rgba(255, 255, 255, 0.35));
+  outline-offset: 2px;
+}
+
+.dfly-list {
+  display: flex;
+  flex-direction: column;
+  height: 260px;
+  min-height: 0;
+  flex-shrink: 1;
+}
+
+.dfly-list-sound {
+  height: 300px;
+}
+
+.dfly-volume {
+  gap: 10px;
+  height: 32px;
+  padding: 0 2px;
+}
+
+.dfly-mute {
+  flex-shrink: 0;
+}
+
+.dfly-mute svg {
+  width: 16px;
+  height: 16px;
+}

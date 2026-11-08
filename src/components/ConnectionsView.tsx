@@ -1,0 +1,280 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { ChevronLeft, Lock, X, Bluetooth, Check, Speaker } from "lucide-react";
+import { useT } from "../i18n";
+import { setVisibleInterval } from "../hooks/visibleInterval";
+import "./ControlCenter.css";
+
+interface WifiNetwork {
+  ssid: string;
+  signal: number;
+  secured: boolean;
+  connected: boolean;
+  known: boolean;
+}
+
+interface BluetoothDeviceInfo {
+  id: string;
+  name: string;
+  connected: boolean;
+}
+
+interface OutputDevice {
+  id: string;
+  name: string;
+  is_default: boolean;
+}
+
+interface Props {
+  kind: "wifi" | "bluetooth" | "audio";
+  /** Without it there is no back button (the dock flyouts have nothing to go back to). */
+  onBack?: () => void;
+  onOpenWindowsSettings: () => void;
+  tip?: (text: string | undefined) => Record<string, unknown>;
+}
+
+const REFRESH_MS = 6000;
+
+function SignalBars({ signal }: { signal: number }) {
+  const t = useT();
+  const level = signal >= 75 ? 4 : signal >= 50 ? 3 : signal >= 25 ? 2 : 1;
+  return (
+    <span className="cv-signal" aria-label={t("connections.signal", { percent: signal })}>
+      {[1, 2, 3, 4].map((bar) => (
+        <i key={bar} className={bar <= level ? "on" : ""} style={{ height: 3 + bar * 2.5 }} />
+      ))}
+    </span>
+  );
+}
+
+interface AudioSession {
+  pid: number;
+  name: string;
+  volume: number;
+  is_muted: boolean;
+}
+
+function AppVolumes() {
+  const t = useT();
+  const [sessions, setSessions] = useState<AudioSession[] | null>(null);
+  const dragging = useRef(false);
+
+  useEffect(() => {
+    const load = () => {
+      if (dragging.current) return;
+      invoke<AudioSession[]>("get_audio_sessions").then(setSessions).catch(() => setSessions((prev) => prev ?? []));
+    };
+    load();
+    const timer = setVisibleInterval(load, 2000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const setVolume = (pid: number, volume: number) => {
+    setSessions((prev) => prev?.map((s) => (s.pid === pid ? { ...s, volume, is_muted: volume === 0 } : s)) ?? prev);
+    invoke("set_app_volume", { pid, volume }).catch(() => {});
+  };
+
+  return (
+    <>
+      <div className="cv-section">{t("connections.audio.apps")}</div>
+      {sessions?.length === 0 && <div className="cv-hint">{t("overlay.mixer.empty")}</div>}
+      {sessions?.map((s) => (
+        <div key={s.pid} className="cv-row cv-app-row">
+          <span className="cv-name">{s.name}</span>
+          <div className="cc-classic-slider-track">
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={s.is_muted ? 0 : s.volume}
+              className="cc-classic-input"
+              onChange={(e) => setVolume(s.pid, parseFloat(e.target.value))}
+              onPointerDown={(e) => { e.stopPropagation(); dragging.current = true; }}
+              onPointerUp={() => { dragging.current = false; }}
+              onPointerCancel={() => { dragging.current = false; }}
+              onClick={(e) => e.stopPropagation()}
+            />
+            <div className="cc-classic-fill" style={{ width: `${(s.is_muted ? 0 : s.volume) * 100}%` }} />
+          </div>
+        </div>
+      ))}
+    </>
+  );
+}
+
+export function ConnectionsView({ kind, onBack, onOpenWindowsSettings, tip = () => ({}) }: Props) {
+  const [networks, setNetworks] = useState<WifiNetwork[] | null>(null);
+  const [devices, setDevices] = useState<BluetoothDeviceInfo[] | null>(null);
+  const [outputs, setOutputs] = useState<OutputDevice[] | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState("");
+  const [passwordFor, setPasswordFor] = useState<string | null>(null);
+  const [password, setPassword] = useState("");
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (passwordFor === null) return;
+    invoke("set_window_keyboard_focus", { enabled: true }).catch(() => {});
+    return () => {
+      invoke("set_window_keyboard_focus", { enabled: false }).catch(() => {});
+    };
+  }, [passwordFor]);
+
+  const refresh = useCallback(async () => {
+    try {
+      if (kind === "wifi") setNetworks(await invoke<WifiNetwork[]>("wifi_scan"));
+      else if (kind === "audio") setOutputs(await invoke<OutputDevice[]>("get_audio_devices"));
+      else setDevices(await invoke<BluetoothDeviceInfo[]>("bluetooth_devices"));
+      setError("");
+    } catch (e) {
+      setError(String(e));
+      if (kind === "wifi") setNetworks((prev) => prev ?? []);
+      else if (kind === "audio") setOutputs((prev) => prev ?? []);
+      else setDevices((prev) => prev ?? []);
+    }
+  }, [kind]);
+
+  useEffect(() => {
+    void refresh();
+    const timer = setVisibleInterval(() => void refresh(), REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [refresh]);
+
+  const t = useT();
+  const run = async (label: string, action: () => Promise<unknown>) => {
+    setBusy(label);
+    setError("");
+    try {
+      await action();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy("");
+      setTimeout(() => void refresh(), 1200);
+    }
+  };
+
+  const joinNetwork = (network: WifiNetwork) => {
+    if (network.connected) return;
+    if (network.secured && !network.known) {
+      setPasswordFor(network.ssid);
+      setPassword("");
+      return;
+    }
+    void run(network.ssid, () => invoke("wifi_connect", { ssid: network.ssid, password: null }));
+  };
+
+  const submitPassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!passwordFor || !password) return;
+    const ssid = passwordFor;
+    const key = password;
+    setPasswordFor(null);
+    setPassword("");
+    void run(ssid, () => invoke("wifi_connect", { ssid, password: key }));
+  };
+
+  const list = kind === "wifi" ? networks : kind === "audio" ? outputs : devices;
+  const loading = list === null;
+  const empty = list?.length === 0;
+  const title = t(kind === "wifi" ? "connections.wifi.title" : kind === "audio" ? "connections.audio.title" : "connections.bluetooth.title");
+  const emptyText = t(kind === "wifi" ? "connections.wifi.empty" : kind === "audio" ? "connections.audio.empty" : "connections.bluetooth.empty");
+
+  return (
+    <div className="cv-root" onClick={(e) => e.stopPropagation()}>
+      <div className="cv-header">
+        {onBack && (
+          <button className="cv-back" onClick={onBack} aria-label={t("common.back")}>
+            <ChevronLeft size={16} />
+          </button>
+        )}
+        <span className="cv-title">{title}</span>
+        <button className="cv-link" onClick={onOpenWindowsSettings}>{t("connections.windowsSettings")}</button>
+      </div>
+
+      <div className="cv-list">
+        {loading && <div className="cv-hint">{kind === "wifi" ? t("connections.scanning") : t("connections.loading")}</div>}
+        {!loading && empty && !error && <div className="cv-hint">{emptyText}</div>}
+
+        {kind === "audio" && outputs?.map((o) => (
+          <div
+            key={o.id}
+            className={`cv-row${o.is_default ? " connected" : ""}${busy === o.id ? " busy" : ""}`}
+            onClick={() => { if (!o.is_default) void run(o.id, () => invoke("set_default_audio_device", { id: o.id })); }}
+          >
+            <Speaker size={13} className="cv-bt-icon" />
+            <span className="cv-name">{o.name}</span>
+            {o.is_default ? <Check size={14} /> : <span className="cv-status">{busy === o.id ? t("connections.switching") : ""}</span>}
+          </div>
+        ))}
+
+        {kind === "audio" && <AppVolumes />}
+
+        {kind === "wifi" && networks?.map((n) => (
+          <div key={n.ssid}>
+            <div
+              className={`cv-row${n.connected ? " connected" : ""}${busy === n.ssid ? " busy" : ""}`}
+              onClick={() => joinNetwork(n)}
+            >
+              <SignalBars signal={n.signal} />
+              <span className="cv-name">{n.ssid}</span>
+              {n.secured && <Lock size={11} className="cv-lock" />}
+              <span className="cv-status">{busy === n.ssid ? t("connections.connecting") : n.connected ? t("connections.connected") : n.known ? t("connections.saved") : ""}</span>
+              {n.connected && (
+                <button className="cv-action" onClick={(e) => { e.stopPropagation(); void run(n.ssid, () => invoke("wifi_disconnect")); }}>
+                  {t("connections.disconnect")}
+                </button>
+              )}
+              {n.known && !n.connected && (
+                <button
+                  className="cv-icon-btn"
+                  {...tip(t("connections.forget"))}
+                  onClick={(e) => { e.stopPropagation(); void run(n.ssid, () => invoke("wifi_forget", { ssid: n.ssid })); }}
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+            {passwordFor === n.ssid && (
+              <form className="cv-password" onSubmit={submitPassword}>
+                <input
+                  type="password"
+                  autoFocus
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder={t("connections.password")}
+                  spellCheck={false}
+                />
+                <button type="submit" disabled={!password}>{t("connections.join")}</button>
+              </form>
+            )}
+          </div>
+        ))}
+
+        {kind === "bluetooth" && devices?.map((d) => (
+          <div key={d.id} className={`cv-row${d.connected ? " connected" : ""}`}>
+            <Bluetooth size={13} className="cv-bt-icon" />
+            <span className="cv-name">{d.name}</span>
+            <span className="cv-status">{d.connected ? t("connections.connected") : t("connections.paired")}</span>
+            {confirmRemove === d.id ? (
+              <button
+                className="cv-action danger"
+                onClick={() => { setConfirmRemove(null); void run(d.id, () => invoke("bluetooth_unpair", { id: d.id })); }}
+              >
+                {t("connections.removeConfirm")}
+              </button>
+            ) : (
+              <button className="cv-icon-btn" {...tip(t("connections.removeDevice"))} onClick={() => setConfirmRemove(d.id)}>
+                <X size={12} />
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {error && <div className="cv-error">{error}</div>}
+    </div>
+  );
+}
+
