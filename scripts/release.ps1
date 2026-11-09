@@ -97,7 +97,7 @@ Invoke-Step "Fetching crates" { Push-Location src-tauri; try { cargo fetch --loc
 $savedKey = $env:TAURI_SIGNING_PRIVATE_KEY
 $savedPassword = $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD
 Remove-Item env:TAURI_SIGNING_PRIVATE_KEY, env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD -ErrorAction SilentlyContinue
-Invoke-Step "Building $product (no bundle, no key)" { bun run tauri build --no-bundle -- --locked }
+Invoke-Step "Building $product (no bundle, no key)" { bun run tauri build --no-bundle '--' --locked }
 
 $bundleLog = Join-Path $out "bundle.log"
 try {
