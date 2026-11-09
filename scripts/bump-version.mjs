@@ -26,7 +26,7 @@ function updateCargoToml() {
 function updateCargoLock(relativePath, packageName) {
   const path = resolve(root, relativePath);
   const content = readFileSync(path, "utf8");
-  const pattern = new RegExp(`(\\[\\[package\\]\\]\\nname = "${packageName}"\\nversion = ")[^"]*(")`);
+  const pattern = new RegExp(`(\\[\\[package\\]\\]\\r?\\nname = "${packageName}"\\r?\\nversion = ")[^"]*(")`);
   writeFileSync(path, content.replace(pattern, `$1${version}$2`));
 }
 
