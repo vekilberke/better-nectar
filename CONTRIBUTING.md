@@ -1,33 +1,34 @@
-# Contributing to Nectar
+# Contributing to Better Nectar
 
 Thanks for wanting to help. Bug reports, ideas, translations and pull requests are all welcome.
 
 ## Before you start
 
-- **Found a bug?** Open an [issue](https://github.com/kua8/Nectar/issues/new/choose) with the bug form. The version, your Windows build, and **Copy Diagnostics** from Settings > About make a big difference.
-- **Have a question or an idea?** Start a [discussion](https://github.com/kua8/Nectar/discussions) first, or a feature request if it is concrete.
-- **Want to send a pull request for a new feature?** Please open an issue or discussion first so we can agree on it before you spend time on it. Bug fixes, translations and documentation fixes can go straight to a pull request.
-- **Security problem?** Do not open an issue. Report it privately in the [Security tab](https://github.com/kua8/Nectar?tab=security-ov-file#).
+- **Found a bug?** Open an [issue](https://github.com/vekilberke/better-nectar/issues/new/choose) with the bug form. The version, your Windows build, and **Copy Diagnostics** from Settings > About make a big difference.
+- **Want to send a pull request for a new feature?** Please open an issue first so we can agree on it before you spend time on it. Bug fixes, translations and documentation fixes can go straight to a pull request.
+- **Security problem?** Do not open an issue; see [SECURITY.md](SECURITY.md).
+- **A bug that is also in upstream Nectar?** Report it here; it may be fixed in [kua8/Nectar](https://github.com/kua8/Nectar) too, but Better Nectar is a separate project.
 
 ## Setting up
 
-You need [Rust](https://rustup.rs/) and [Bun](https://bun.sh/), on Windows.
+See [BUILDING.md](BUILDING.md) for the toolchain. In short:
 
 ```bash
-git clone https://github.com/kua8/Nectar.git
-cd Nectar
-bun install
+git clone https://github.com/vekilberke/better-nectar.git
+cd better-nectar
+bun install --frozen-lockfile
 bun run tauri dev
 ```
 
-Useful checks before you push:
+Checks before you push:
 
 ```bash
-npx tsc --noEmit
+bun x tsc --noEmit
+bun test
 cd src-tauri && cargo test --bin nectar
 ```
 
-To try a release build, run `bun run tauri build --no-bundle`. The exe is `src-tauri/target/release/nectar.exe`.
+To try a release build, run `bun run tauri build --no-bundle`. The exe is `src-tauri/target/release/better-nectar.exe` and needs `WebView2Loader.dll` next to it (see BUILDING.md).
 
 ## Pull requests
 
@@ -45,4 +46,4 @@ Translations live in `src/locales/<code>.json`. To add a language, add the file,
 
 ## License
 
-Nectar is licensed under the [GPLv3](LICENSE). By sending a pull request you agree that your contribution is released under the same license. Nectar is a fork of [Bloom](https://github.com/SehajveerSingh2005/bloom) by Sehajveer Singh, and some code is adapted from it.
+Better Nectar is licensed under the [GPLv3](LICENSE). By sending a pull request you agree that your contribution is released under the same license. It is a modified version of [Nectar](https://github.com/kua8/Nectar) by kua8, which began as a fork of [Bloom](https://github.com/SehajveerSingh2005/bloom) by Sehajveer Singh; see [NOTICE](NOTICE).

@@ -282,7 +282,7 @@
   "about.hitbox": "Journaliser les clics sur le dock et le notch",
   "about.hitbox.desc": "Activez, survolez le dock et le notch quelques secondes, puis copiez le diagnostic. Se réinitialise au redémarrage",
   "about.danger.group": "Zone dangereuse",
-  "about.footer": "Fait avec ❤️ par kua8",
+  "about.footer": "Basé sur Nectar de kua8, modifié par vekilberke",
   "calsync.guide.google.step1": "Ouvrez Google Agenda sur le web (calendar.google.com).",
   "calsync.guide.google.step2": "Survolez l’agenda dans la liste de gauche, cliquez sur le menu à trois points, puis sur Paramètres et partage.",
   "calsync.guide.google.step3": "Descendez jusqu’à Intégrer l’agenda et copiez l’adresse secrète au format iCal.",

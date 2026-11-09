@@ -8,7 +8,7 @@ use crate::calendar_sync::{
     self, CalEvent, CalInfo, SourceData, ACCOUNT_KEY, LOOKAHEAD_DAYS, LOOKBACK_DAYS,
 };
 
-const KEYRING_SERVICE: &str = "Nectar CalDAV";
+const KEYRING_SERVICE: &str = crate::identity::APP.caldav_target;
 pub const AUTH_ERROR: &str = "Login failed. Check the username and app password.";
 const CALDAV_NS: &str = "urn:ietf:params:xml:ns:caldav";
 
@@ -23,7 +23,8 @@ fn entry(username: &str) -> Result<keyring::Entry, String> {
 }
 
 fn load_password(username: &str) -> Option<String> {
-    entry(username).ok()?.get_password().ok()
+    let current = entry(username).ok()?;
+    current.get_password().ok().or_else(|| crate::identity::adopt_legacy_secret(&current, crate::identity::LEGACY.caldav_target, username))
 }
 
 fn configured(app: &AppHandle) -> Option<(String, String)> {

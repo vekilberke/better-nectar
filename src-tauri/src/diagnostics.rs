@@ -22,14 +22,15 @@ pub static HOOK_LAST_EVENT_MS: AtomicI64 = AtomicI64::new(0);
 
 pub fn init() {
     let Ok(appdata) = std::env::var("APPDATA") else { return };
-    let dir = PathBuf::from(appdata).join("com.kua8.nectar").join("logs");
+    let dir = PathBuf::from(appdata).join(crate::identity::APP.identifier).join("logs");
     if fs::create_dir_all(&dir).is_err() {
         return;
     }
     let _ = LOG_DIR.set(dir);
     install_panic_hook();
     log(&format!(
-        "---- Nectar {} starting (pid {}) ----",
+        "---- {} {} starting (pid {}) ----",
+        crate::identity::APP.display,
         env!("CARGO_PKG_VERSION"),
         std::process::id()
     ));
@@ -59,6 +60,10 @@ fn install_panic_hook() {
         let name = thread.name().unwrap_or("<unnamed>");
         let backtrace = std::backtrace::Backtrace::force_capture();
         log(&format!("PANIC on thread '{name}': {info}\n{backtrace}"));
+        // A panic in an `extern "system"` callback aborts, so `RunEvent::Exit` never restores it.
+        if crate::state::NATIVE_TASKBAR_HIDDEN.load(Ordering::Relaxed) {
+            crate::utils::set_taskbar_visibility(true, true);
+        }
         default_hook(info);
     }));
 }
@@ -139,9 +144,45 @@ fn running_conflicts() -> String {
 
 fn sensitive_key(key: &str) -> bool {
     let k = key.to_lowercase();
-    ["caldav", "ics", "token", "password", "email", "account", "url", "location", "weather-cached"]
-        .iter()
-        .any(|s| k.contains(s))
+    let anywhere = ["caldav", "ics", "token", "password", "email", "account", "url", "location", "weather-", "folder", "path"];
+    // Short words only as whole `-` separated parts, so `-translate` or `-direction` stay.
+    let segments = ["lat", "lon", "city", "zone", "dir"];
+    anywhere.iter().any(|s| k.contains(s)) || k.split('-').any(|part| segments.contains(&part))
+}
+
+/// Replaces the profile folder with `~` and the bare Windows user name with `<user>`, in any case
+/// and with either slash, so a pasted report does not carry who the user is.
+fn redact(text: &str, profile: Option<&str>, user: Option<&str>) -> String {
+    let mut out = text.to_string();
+    if let Some(profile) = profile.filter(|p| p.len() > 3) {
+        for variant in [profile.to_string(), profile.replace('\\', "/")] {
+            out = replace_ignore_case(&out, &variant, "~");
+        }
+    }
+    if let Some(user) = user.filter(|u| u.len() > 1) {
+        out = replace_ignore_case(&out, user, "<user>");
+    }
+    out
+}
+
+fn replace_ignore_case(text: &str, needle: &str, with: &str) -> String {
+    let lower = text.to_lowercase();
+    let pattern = needle.to_lowercase();
+    if pattern.is_empty() || lower.len() != text.len() {
+        return text.replace(needle, with);
+    }
+    let mut out = String::with_capacity(text.len());
+    let mut last = 0;
+    for (at, _) in lower.match_indices(&pattern) {
+        if at < last {
+            continue;
+        }
+        out.push_str(&text[last..at]);
+        out.push_str(with);
+        last = at + pattern.len();
+    }
+    out.push_str(&text[last..]);
+    out
 }
 
 fn settings_snapshot() -> String {
@@ -209,9 +250,9 @@ pub fn build_report(app: &AppHandle) -> String {
     let hook_age = if last == 0 { "never".to_string() } else { format!("{}ms ago", now - last) };
 
     let report = format!(
-        "Nectar diagnostics\n\
+        "{app} diagnostics\n\
          ==================\n\
-         Nectar: {version}\n\
+         Version: {version}\n\
          Windows: {windows}\n\
          WebView2: {webview}\n\
          GPU: {gpu}\n\
@@ -223,6 +264,7 @@ pub fn build_report(app: &AppHandle) -> String {
          Windows:\n{windows_info}\n\
          Settings:\n{settings}\n\n\
          Recent log:\n{log}\n",
+        app = crate::identity::APP.display,
         version = env!("CARGO_PKG_VERSION"),
         windows = windows_version(),
         webview = tauri::webview_version().unwrap_or_else(|_| "unknown".into()),
@@ -238,8 +280,46 @@ pub fn build_report(app: &AppHandle) -> String {
         log = tail(24_000),
     );
 
+    let profile = std::env::var("USERPROFILE").ok();
+    let user = std::env::var("USERNAME").ok();
+    let report = redact(&report, profile.as_deref(), user.as_deref());
+
     if let Some(dir) = LOG_DIR.get() {
         let _ = fs::write(dir.join(REPORT_FILE), &report);
     }
     report
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn personal_settings_are_filtered() {
+        for key in [
+            "nectar-weather-lat",
+            "nectar-weather-lon",
+            "nectar-weather-city",
+            "nectar-notch-downloads-folder",
+            "nectar-dual-clock-zone",
+            "nectar-caldav-url",
+            "nectar-download-dir",
+        ] {
+            assert!(sensitive_key(key), "{key}");
+        }
+        for key in ["nectar-scale", "nectar-dock-direction", "nectar-auto-translate", "nectar-notch-mode", "nectar-time-format-24h"] {
+            assert!(!sensitive_key(key), "{key}");
+        }
+    }
+
+    #[test]
+    fn report_has_no_user_name() {
+        let sample = "Executable: C:\\Users\\Someone\\AppData\\Local\\Better Nectar\\better-nectar.exe\n\
+                      [log] opened c:/users/someone/Desktop/a.txt for SOMEONE";
+        let out = redact(sample, Some("C:\\Users\\someone"), Some("someone"));
+        assert!(!out.to_lowercase().contains("someone"), "{out}");
+        assert!(out.contains("~\\AppData\\Local\\Better Nectar"));
+        assert!(out.contains("~/Desktop/a.txt"));
+        assert!(out.contains("<user>"));
+    }
 }

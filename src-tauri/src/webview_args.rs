@@ -22,7 +22,7 @@ fn settings_file() -> Option<std::path::PathBuf> {
     let appdata = std::env::var_os("APPDATA")?;
     Some(
         std::path::PathBuf::from(appdata)
-            .join("com.kua8.nectar")
+            .join(crate::identity::APP.identifier)
             .join("settings.json"),
     )
 }

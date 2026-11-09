@@ -1,5 +1,28 @@
-Better Nectar is a modified version of Nectar by kua8
-(https://github.com/kua8/Nectar, v1.9.3, commit 01345437), licensed under GPL-3.0.
-Modified by vekilberke since 2026-11-07. Nectar began as a fork of Bloom by Sehajveer Singh.
+Better Nectar
+Copyright (C) 2026 vekilberke and the Nectar authors
 
-Better Nectar is an unofficial fork. It is not affiliated with or endorsed by kua8.
+This program is a modified version of Nectar by kua8
+(https://github.com/kua8/Nectar), version 1.9.3, commit 01345437,
+licensed under the GNU General Public License version 3 (see LICENSE).
+
+It has been modified by vekilberke since 2026-11-07. The changes include
+Claude Code session status, permission answers and a usage meter in the
+notch; clipboard history; a redesigned shelf; a dock system area; notch
+notifications and downloads; a microphone and camera indicator and a
+meeting-mode hotkey; a reactive pixel cat; a first-start screen; its own
+application identity, installer and update channel; and the removal of the
+phone link from the shared build. The full list of changes is the source
+history of https://github.com/vekilberke/better-nectar compared with the
+upstream commit above.
+
+Nectar began as a fork of Bloom by Sehajveer Singh
+(https://github.com/SehajveerSingh2005/bloom).
+
+The pixel cat sprites are based on SondeR cat by Verisonder, licensed under
+the Apache License 2.0; see third_party/sonder-cat/LICENSE and
+third_party/sonder-cat/NOTICE.
+
+This program comes with ABSOLUTELY NO WARRANTY. It is free software, and you
+are welcome to redistribute it under the terms of the GNU General Public
+License version 3. Licences of the bundled third-party components are listed
+in THIRD_PARTY_LICENSES.md.

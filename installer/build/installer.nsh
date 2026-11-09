@@ -116,12 +116,20 @@ FunctionEnd
     WriteRegStr SHCTX "${UNINSTKEY}" "UninstallString" "$\"$INSTDIR\${MAINBINARYNAME}.exe$\" --uninstall"
   ${EndIf}
   FileOpen $0 "$INSTDIR\.install-scope" w
-  ${If} $MultiUser.InstallMode == "AllUsers"
+  !if "${INSTALLMODE}" == "both"
+    ${If} $MultiUser.InstallMode == "AllUsers"
+      FileWrite $0 "all-users"
+    ${Else}
+      FileWrite $0 "user"
+    ${EndIf}
+  !else if "${INSTALLMODE}" == "perMachine"
     FileWrite $0 "all-users"
-  ${Else}
+  !else
     FileWrite $0 "user"
-  ${EndIf}
+  !endif
   FileClose $0
+  ; Escape hatch when the app died with the taskbar hidden (native_uninstall removes it).
+  CreateShortcut "$SMPROGRAMS\Restore Windows taskbar (${PRODUCTNAME}).lnk" "$INSTDIR\${MAINBINARYNAME}.exe" "restore-taskbar" "$INSTDIR\${MAINBINARYNAME}.exe" 0
 !macroend
 
 ;

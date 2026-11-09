@@ -37,9 +37,11 @@ const FOLLOW_UP_MS: u32 = 1000;
 
 /// Ids of Nectar's own notch cards (phone link); kept out of the range Windows hands out.
 const LOCAL_ID_BASE: u32 = 0xF000_0000;
+#[cfg(feature = "phone-link")]
 static LOCAL_ID: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(LOCAL_ID_BASE);
 
 /// A card from Nectar itself, shown like a Windows toast.
+#[cfg(feature = "phone-link")]
 pub fn show_local(app: &AppHandle, source: &str, title: &str, body: &str) {
     let id = LOCAL_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed).max(LOCAL_ID_BASE);
     let n = NotchNotification {
@@ -102,7 +104,10 @@ pub fn parse_exclude(raw: Option<&str>) -> Vec<String> {
 }
 
 pub fn is_own(aumid: &str, app: &str) -> bool {
-    aumid.to_ascii_lowercase().contains("com.kua8.nectar") || app.eq_ignore_ascii_case("nectar")
+    let aumid = aumid.to_ascii_lowercase();
+    [crate::identity::APP.identifier, crate::identity::LEGACY.identifier].iter().any(|id| aumid.contains(id))
+        || app.eq_ignore_ascii_case(crate::identity::LEGACY.display)
+        || app.eq_ignore_ascii_case(crate::identity::APP.display)
 }
 
 /// Ids that appeared and ids that went away since the last list, both ascending.

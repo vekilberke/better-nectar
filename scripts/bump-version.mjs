@@ -30,12 +30,6 @@ function updateCargoLock(relativePath, packageName) {
   writeFileSync(path, content.replace(pattern, `$1${version}$2`));
 }
 
-function updateInstallerCargoToml() {
-  const path = resolve(root, "installer-app/src-tauri/Cargo.toml");
-  const content = readFileSync(path, "utf8");
-  writeFileSync(path, content.replace(/^version = "[^"]*"/m, `version = "${version}"`));
-}
-
 function updatePackageLockJson(relativePath) {
   const path = resolve(root, relativePath);
   const json = JSON.parse(readFileSync(path, "utf8"));
@@ -44,23 +38,10 @@ function updatePackageLockJson(relativePath) {
   writeFileSync(path, JSON.stringify(json, null, 2) + "\n");
 }
 
-function updateReleaseBadge() {
-  const path = resolve(root, "README.md");
-  const content = readFileSync(path, "utf8");
-  writeFileSync(path, content.replace(/shieldcn\.dev\/badge\/release-v[\d.]+\.svg/, `shieldcn.dev/badge/release-v${version}.svg`));
-}
-
 updateJson("package.json");
 updateJson("src-tauri/tauri.conf.json");
 updateCargoToml();
 updateCargoLock("src-tauri/Cargo.lock", "nectar");
 updatePackageLockJson("package-lock.json");
 
-updateJson("installer-app/package.json");
-updateJson("installer-app/src-tauri/tauri.conf.json");
-updateInstallerCargoToml();
-updateCargoLock("installer-app/src-tauri/Cargo.lock", "nectar-installer");
-updatePackageLockJson("installer-app/package-lock.json");
-updateReleaseBadge();
-
-console.log(`Bumped package.json, tauri.conf.json, Cargo.toml, Cargo.lock and package-lock.json (main app + installer-app) to ${version}`);
+console.log(`Bumped package.json, tauri.conf.json, Cargo.toml, Cargo.lock and package-lock.json to ${version}`);

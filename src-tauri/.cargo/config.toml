@@ -1,0 +1,4 @@
+# Link the C runtime pieces (libunwind) into the exe, so the release needs only WebView2Loader.dll
+# next to it (I-321). An env RUSTFLAGS overrides this.
+[target.x86_64-pc-windows-gnullvm]
+rustflags = ["-C", "target-feature=+crt-static"]

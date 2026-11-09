@@ -1,3 +1,4 @@
+#[cfg(feature = "phone-link")]
 use crate::phone_link::remote::Deny;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -30,6 +31,7 @@ static PENDING: Mutex<Option<HashMap<u64, (mpsc::Sender<bool>, PendingAsk)>>> = 
 
 /// A permission request waiting for Allow / Deny (shown in the notch and, with `agentAsk`, on the phone).
 #[derive(Serialize, Clone, Debug)]
+#[cfg_attr(not(feature = "phone-link"), allow(dead_code))]
 pub struct PendingAsk {
     pub id: u64,
     pub name: Option<String>,
@@ -50,7 +52,7 @@ pub struct PendingAsk {
     host: Option<String>,
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "phone-link"))]
 impl PendingAsk {
     pub fn sample(id: u64, text: &str) -> Self {
         let long = |n: usize| Some(text.chars().cycle().take(n).collect::<String>());
@@ -120,7 +122,7 @@ struct Activity {
 }
 
 pub fn data_dir() -> Option<PathBuf> {
-    std::env::var_os("APPDATA").map(|dir| PathBuf::from(dir).join("com.kua8.nectar"))
+    crate::identity::data_dir()
 }
 
 fn config_path() -> Option<PathBuf> {
@@ -249,10 +251,12 @@ pub fn answer(id: u64, allow: bool) {
     if let Some((sender, _)) = take_pending(id) {
         let _ = sender.send(allow);
         // The phone's status lists pending asks; this one is gone now.
+        #[cfg(feature = "phone-link")]
         crate::phone_link::host::mark_dirty();
     }
 }
 
+#[cfg(feature = "phone-link")]
 pub fn pending_asks() -> Vec<PendingAsk> {
     let mut asks: Vec<PendingAsk> =
         PENDING.lock().ok().and_then(|map| map.as_ref().map(|m| m.values().map(|(_, a)| a.clone()).collect())).unwrap_or_default();
@@ -260,6 +264,7 @@ pub fn pending_asks() -> Vec<PendingAsk> {
     asks
 }
 
+#[cfg(feature = "phone-link")]
 /// Takes the ask only when `key` is the one it was created with. A truncated ask (the phone
 /// never saw all of it) may only be denied (design appendix B); allowing it leaves it pending.
 fn take_pending_keyed(id: u64, key: &str, allow: bool) -> Result<(mpsc::Sender<bool>, PendingAsk), Deny> {
@@ -276,6 +281,7 @@ fn take_pending_keyed(id: u64, key: &str, allow: bool) -> Result<(mpsc::Sender<b
 }
 
 /// Answer from a paired phone (`agentAsk`). Also clears the request in the notch.
+#[cfg(feature = "phone-link")]
 pub fn answer_remote(app: &AppHandle, id: u64, key: &str, allow: bool) -> Result<(), Deny> {
     let (sender, ask) = take_pending_keyed(id, key, allow)?;
     let delivered = sender.send(allow).is_ok();
@@ -466,11 +472,10 @@ fn hook_entries(exe: &str) -> Vec<(&'static str, Option<&'static str>, serde_jso
     ]
 }
 
+/// Only this build's exe: another Nectar install's hooks stay untouched.
 fn is_ours(group: &serde_json::Value) -> bool {
     group["hooks"].as_array().is_some_and(|hooks| {
-        hooks.iter().any(|hook| {
-            hook["args"][0].as_str() == Some("agent") && hook["command"].as_str().is_some_and(|c| c.to_ascii_lowercase().contains("nectar"))
-        })
+        hooks.iter().any(|hook| hook["args"][0].as_str() == Some("agent") && hook["command"].as_str().is_some_and(crate::identity::is_our_exe))
     })
 }
 
@@ -563,6 +568,12 @@ fn sync_hooks_when(enable: impl FnOnce() -> bool) {
 
 pub fn set_hooks(enable: bool) {
     sync_hooks_when(|| enable);
+}
+
+/// The welcome screen offers the Claude Code integration only when `~/.claude` exists.
+#[tauri::command]
+pub fn claude_code_present() -> bool {
+    std::env::var_os("USERPROFILE").is_some_and(|d| PathBuf::from(d).join(".claude").is_dir())
 }
 
 /// After `nectar-agent-api` or `nectar-claude-usage` changed (or at start): syncs to the settings as they are when it runs.
@@ -979,6 +990,17 @@ b	 ".into()), 40).as_deref(), Some("ab"));
     }
 
     #[test]
+    fn hooks_of_another_nectar_install_are_not_ours() {
+        let group = |exe: &str| serde_json::json!({ "hooks": [{ "type": "command", "command": exe, "args": ["agent", "done"] }] });
+        let mine = format!(r"C:\Users\a\AppData\Local\X\{}", crate::identity::APP.exe);
+        let other_exe = if crate::identity::APP.exe == crate::identity::LEGACY.exe { crate::identity::SHARED.exe } else { crate::identity::LEGACY.exe };
+        let other = format!(r"C:\Users\a\AppData\Local\Y\{other_exe}");
+        assert!(is_ours(&group(&mine)));
+        assert!(!is_ours(&group(&other)));
+        assert!(!is_ours(&serde_json::json!({ "hooks": [{ "type": "command", "command": mine, "args": ["statusline"] }] })));
+    }
+
+    #[test]
     fn ask_ids_do_not_restart_and_keys_are_random() {
         let a = next_ask_id();
         assert!(a > 1 && a < 1 << 53, "fits a JS safe integer: {a}");
@@ -988,6 +1010,7 @@ b	 ".into()), 40).as_deref(), Some("ab"));
         assert_ne!(k1, k2);
     }
 
+    #[cfg(feature = "phone-link")]
     #[test]
     fn an_answer_with_another_asks_key_does_not_take_it() {
         let (tx, _rx) = mpsc::channel();
@@ -1001,6 +1024,7 @@ b	 ".into()), 40).as_deref(), Some("ab"));
         assert!(take_pending(id).is_none());
     }
 
+    #[cfg(feature = "phone-link")]
     #[test]
     fn a_truncated_ask_can_only_be_denied() {
         let (tx, rx) = mpsc::channel();

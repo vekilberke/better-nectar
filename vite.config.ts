@@ -9,6 +9,12 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig(async () => ({
   plugins: [react(), svgr()],
 
+  // Own build (`bun run build:own`) only; the shared build leaves every phone link call out.
+  define: {
+    // @ts-expect-error process is a nodejs global
+    __PHONE_LINK__: JSON.stringify(process.env.VITE_PHONE_LINK === "1"),
+  },
+
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
   // 1. prevent Vite from obscuring rust errors

@@ -396,6 +396,7 @@ pub fn configure(app: &AppHandle, generation: u64, enabled: bool, size: usize, p
 }
 
 /// Phone clipboard sync turned on or off (`phone_link::clip_sync`).
+#[cfg(feature = "phone-link")]
 pub fn set_phone_sync(on: bool) {
     PHONE_ON.store(on, Ordering::SeqCst);
     apply_want();
@@ -534,6 +535,7 @@ fn on_update(hwnd: HWND) {
         return;
     }
     let Some(captured) = (unsafe { read_clip(hwnd, history) }) else { return };
+    #[cfg(feature = "phone-link")]
     if phone {
         match &captured {
             Captured::Text(text) => crate::phone_link::clip_sync::on_copy(text.clone(), seq),

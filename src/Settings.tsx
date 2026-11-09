@@ -1,4 +1,4 @@
-import { StrictMode, useState, useEffect } from "react";
+import { StrictMode, Suspense, lazy, useState, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { Effect, EffectState } from "@tauri-apps/api/window";
@@ -15,14 +15,19 @@ import {
   DockTab,
   OverlaysTab,
   AboutTab,
-  PhoneLinkTab,
 } from "./settings/index";
 import type { SettingsTab } from "./settings/index";
+import { WelcomeView } from "./settings/WelcomeView";
+import { PHONE_LINK } from "./buildFlags";
+import { WELCOME_KEY } from "./welcomeGate";
 import { initTheme } from "./theme";
 import { useT } from "./i18n";
 import "./Settings.css";
 
 const appWindow = getCurrentWebviewWindow();
+
+// Only the owner's own build has phone link; the shared build leaves the tab and its calls out.
+const PhoneLinkTab = PHONE_LINK ? lazy(() => import("./settings/PhoneLinkTab").then((m) => ({ default: m.PhoneLinkTab }))) : null;
 
 const TABS: { id: SettingsTab; labelKey: string; icon: typeof Settings }[] = [
   { id: "general", labelKey: "tabs.general", icon: Settings },
@@ -30,7 +35,7 @@ const TABS: { id: SettingsTab; labelKey: string; icon: typeof Settings }[] = [
   { id: "notch", labelKey: "tabs.notch", icon: PanelTop },
   { id: "dock", labelKey: "tabs.dock", icon: Monitor },
   { id: "overlays", labelKey: "tabs.overlays", icon: Layers },
-  { id: "phone", labelKey: "tabs.phone", icon: Smartphone },
+  ...(PHONE_LINK ? [{ id: "phone" as const, labelKey: "tabs.phone", icon: Smartphone }] : []),
   { id: "about", labelKey: "tabs.about", icon: Info },
 ];
 
@@ -38,9 +43,16 @@ function SettingsApp() {
   const t = useT();
   const [activeTab, setActiveTab] = useState<SettingsTab>("general");
   const settings = useSettings();
+  const [welcome, setWelcome] = useState(false);
 
   useEffect(() => {
     return initTheme();
+  }, []);
+
+  useEffect(() => {
+    invoke<Record<string, unknown>>("load_settings")
+      .then((s) => setWelcome(s?.[WELCOME_KEY] === "pending"))
+      .catch(() => { });
   }, []);
 
   useEffect(() => {
@@ -82,6 +94,13 @@ function SettingsApp() {
         <WindowControls />
       </div>
 
+      {welcome ? (
+        <div className="settings-body">
+          <div className="settings-content">
+            <WelcomeView settings={settings} onDone={() => setWelcome(false)} />
+          </div>
+        </div>
+      ) : (
       <div className="settings-body">
         <div className="settings-sidebar">
           {TABS.map(({ id, labelKey, icon: Icon }) => (
@@ -311,7 +330,11 @@ function SettingsApp() {
               toggleBrightnessEdge={settings.toggleBrightnessEdge}
             />
           )}
-          {activeTab === "phone" && <PhoneLinkTab />}
+          {activeTab === "phone" && PhoneLinkTab && (
+            <Suspense fallback={null}>
+              <PhoneLinkTab />
+            </Suspense>
+          )}
           {activeTab === "about" && (
             <AboutTab
               appVersion={settings.appVersion}
@@ -336,6 +359,7 @@ function SettingsApp() {
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }

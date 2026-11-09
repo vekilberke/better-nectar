@@ -1,0 +1,10 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "nectar",
+  "mainBinaryName": "nectar",
+  "identifier": "com.kua8.nectar",
+  "bundle": {
+    "createUpdaterArtifacts": false,
+    "publisher": "kua8"
+  }
+}

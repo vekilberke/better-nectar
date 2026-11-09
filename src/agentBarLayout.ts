@@ -8,7 +8,7 @@ const GAP = 8;
 const COUNT_MIN = 16;
 const COUNT_PAD = 8;
 const RING = 12;
-const SLACK = 2;
+const SLACK = 6;
 
 export interface AgentBarParts {
   status: number;
@@ -33,7 +33,11 @@ export const agentTimerTemplate = (elapsedMs: number) => (elapsedMs >= 3_600_000
 export interface StickyWidth {
   run: number | string;
   width: number;
+  /** When the content last needed this width; the bar may shrink STICKY_HOLD_MS after that. */
+  seen: number;
 }
+
+export const STICKY_HOLD_MS = 3000;
 
 /**
  * What the width sticks to: one session's run, or, while several work at once, all of them together,
@@ -41,8 +45,12 @@ export interface StickyWidth {
  */
 export const agentBarRunKey = (run: { count: number; since: number }): number | string => (run.count > 1 ? "several" : run.since);
 
-/** Within one run the bar only grows, so tool names of different lengths do not make the notch pulse. */
-export function stickyWidth(prev: StickyWidth | null, run: number | string, width: number): StickyWidth {
-  if (!prev || prev.run !== run) return { run, width };
-  return width > prev.width ? { run, width } : prev;
+/**
+ * Within one run the bar holds its widest width while that content keeps coming back (tool names of
+ * different lengths, focus flipping between sessions), so the notch does not pulse; once the wide content
+ * has been gone for STICKY_HOLD_MS it shrinks to fit again.
+ */
+export function stickyWidth(prev: StickyWidth | null, run: number | string, width: number, now: number): StickyWidth {
+  if (!prev || prev.run !== run || width >= prev.width || now - prev.seen >= STICKY_HOLD_MS) return { run, width, seen: now };
+  return prev;
 }

@@ -282,7 +282,7 @@
   "about.hitbox": "Registrar clics en el dock y el notch",
   "about.hitbox.desc": "Actívalo, mueve el cursor sobre el dock y el notch unos segundos y copia el diagnóstico. Se restablece al reiniciar",
   "about.danger.group": "Zona de peligro",
-  "about.footer": "Hecho con ❤️ por kua8",
+  "about.footer": "Basado en Nectar de kua8, modificado por vekilberke",
   "calsync.guide.google.step1": "Abre Google Calendar en la web (calendar.google.com).",
   "calsync.guide.google.step2": "Pasa el cursor por el calendario en la lista de la izquierda, haz clic en el menú de tres puntos y elige Configuración y uso compartido.",
   "calsync.guide.google.step3": "Baja hasta Integrar calendario y copia la dirección secreta en formato iCal.",

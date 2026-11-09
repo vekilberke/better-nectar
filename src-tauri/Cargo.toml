@@ -1,8 +1,8 @@
 [package]
 name = "nectar"
-version = "1.9.3"
+version = "2.0.0"
 description = ""
-authors = ["kua8"]
+authors = ["kua8", "vekilberke"]
 edition = "2021"
 license = "GPL-3.0-only"
 
@@ -96,8 +96,8 @@ tauri-plugin-updater = "2"
 window-vibrancy = "0.7.1"
 wmi = "0.14"
 tokio = { version = "1", features = ["time", "sync", "net", "io-util", "rt", "macros"] }
-tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
-futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+tokio-tungstenite = { version = "0.26", features = ["native-tls"], optional = true }
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"], optional = true }
 webview2-com = "0.38"
 image = "0.25"
 tauri-plugin-drag = "2.1.1"
@@ -109,15 +109,19 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "std"
 keyring = { version = "3", features = ["windows-native"] }
 rrule = "0.14"
 chrono-tz = "0.10"
-x25519-dalek = { version = "2.0.1", features = ["static_secrets", "zeroize"] }
-chacha20poly1305 = "0.10.1"
-hkdf = "0.12.4"
-hmac = "0.12.1"
-sha2 = "0.10"
-getrandom = "0.2"
-zeroize = "1"
-qrcode = { version = "0.14", default-features = false, features = ["svg"] }
+x25519-dalek = { version = "2.0.1", features = ["static_secrets", "zeroize"], optional = true }
+chacha20poly1305 = { version = "0.10.1", optional = true }
+hkdf = { version = "0.12.4", optional = true }
+hmac = { version = "0.12.1", optional = true }
+sha2 = { version = "0.10", optional = true }
+getrandom = { version = "0.2", optional = true }
+zeroize = { version = "1", optional = true }
+qrcode = { version = "0.14", default-features = false, features = ["svg"], optional = true }
 
+[features]
+default = []
+# The owner's own build: phone link, the upstream identity (tauri.own.conf.json) and no updater.
+phone-link = ["dep:tokio-tungstenite", "dep:futures-util", "dep:x25519-dalek", "dep:chacha20poly1305", "dep:hkdf", "dep:hmac", "dep:sha2", "dep:getrandom", "dep:zeroize", "dep:qrcode"]
 
 [profile.release]
 strip = true

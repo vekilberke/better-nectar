@@ -1,8 +1,9 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "nectar",
-  "version": "1.9.3",
-  "identifier": "com.kua8.nectar",
+  "productName": "Better Nectar",
+  "mainBinaryName": "better-nectar",
+  "version": "2.0.0",
+  "identifier": "io.github.vekilberke.betternectar",
   "build": {
     "beforeDevCommand": "bun run dev",
     "devUrl": "http://localhost:1420",
@@ -82,7 +83,10 @@
   "bundle": {
     "active": true,
     "createUpdaterArtifacts": true,
-    "targets": "all",
+    "targets": [
+      "nsis"
+    ],
+    "publisher": "vekilberke",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -91,8 +95,11 @@
       "icons/icon.ico"
     ],
     "windows": {
+      "webviewInstallMode": {
+        "type": "embedBootstrapper"
+      },
       "nsis": {
-        "installMode": "both",
+        "installMode": "currentUser",
         "headerImage": "../installer/assets/header.bmp",
         "sidebarImage": "../installer/assets/sidebar.bmp",
         "installerIcon": "icons/icon.ico",
@@ -108,9 +115,9 @@
         "installMode": "quiet"
       },
       "endpoints": [
-        "https://github.com/kua8/Nectar/releases/latest/download/latest.json"
+        "https://github.com/vekilberke/better-nectar/releases/latest/download/latest.json"
       ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDY2QTJCRjEzRjIxNkI5NkEKUldScXVSYnlFNytpWm0ycmxwTVVUeDdxMjVPdHBzNGJHcm1LT2RFVWVNOC9zd3Y1bHpLM1BwWFIK"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDdFRTExNzA2OTFDREMzNUEKUldSYXc4MlJCaGZoZmpPN3lQUGJQNUtWRytDbnFidGtRdWlDU3BFTXJuRytGYXVzUy9wa0xLU0cK"
     }
   }
 }

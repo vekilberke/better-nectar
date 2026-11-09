@@ -169,6 +169,8 @@ async function resolveLocation(): Promise<ResolvedLocation | null> {
         city: savedCity || undefined,
       };
     }
+    // No IP lookup before the welcome screen asked about the location (or an old install was adopted).
+    if (String(settings["nectar-welcome-done"]) !== "true") return null;
   } catch {
     // continue to IP geolocation
   }

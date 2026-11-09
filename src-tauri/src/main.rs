@@ -40,6 +40,9 @@ mod on_demand_windows;
 mod wallpaper;
 mod live_preview;
 mod notifications;
+mod identity;
+mod taskbar_guard;
+#[cfg(feature = "phone-link")]
 mod phone_link;
 
 use tauri::Manager;
@@ -67,6 +70,9 @@ fn main() {
     if let Some(code) = agent_api::run_cli(&args) {
         std::process::exit(code);
     }
+    if let Some(code) = taskbar_guard::run_cli(&args) {
+        std::process::exit(code);
+    }
 
     if native_uninstall::requested() {
         native_uninstall::run();
@@ -87,8 +93,23 @@ fn main() {
         use windows::Win32::System::Threading::{CreateMutexW, CreateEventW, OpenEventW, SetEvent, SYNCHRONIZATION_ACCESS_RIGHTS};
         use windows::Win32::Foundation::{GetLastError, CloseHandle};
 
-        let mutex_name: Vec<u16> = "NectarSingleInstance".encode_utf16().chain(std::iter::once(0)).collect();
-        let event_name: Vec<u16> = "NectarOpenSettings".encode_utf16().chain(std::iter::once(0)).collect();
+        // Both would hide the taskbar and draw a dock.
+        #[cfg(not(feature = "phone-link"))]
+        {
+            use windows::Win32::System::Threading::{OpenMutexW, SYNCHRONIZATION_SYNCHRONIZE};
+            let upstream = crate::uninstall_registry::wide(identity::LEGACY.mutex);
+            if let Ok(h) = OpenMutexW(SYNCHRONIZATION_SYNCHRONIZE, false, windows::core::PCWSTR(upstream.as_ptr())) {
+                let _ = CloseHandle(h);
+                use windows::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONINFORMATION, MB_OK, MB_TOPMOST};
+                let text = crate::uninstall_registry::wide("Nectar is running. Quit Nectar from its tray icon first, then start Better Nectar again.");
+                let title = crate::uninstall_registry::wide(identity::APP.display);
+                MessageBoxW(None, windows::core::PCWSTR(text.as_ptr()), windows::core::PCWSTR(title.as_ptr()), MB_OK | MB_ICONINFORMATION | MB_TOPMOST);
+                return;
+            }
+        }
+
+        let mutex_name: Vec<u16> = identity::APP.mutex.encode_utf16().chain(std::iter::once(0)).collect();
+        let event_name: Vec<u16> = identity::APP.open_event.encode_utf16().chain(std::iter::once(0)).collect();
 
         let h_mutex = CreateMutexW(None, true, windows::core::PCWSTR(mutex_name.as_ptr())).ok();
         let err = GetLastError();
@@ -108,6 +129,10 @@ fn main() {
         }
         if let Some(h) = h_mutex { let _ = SINGLE_INSTANCE_MUTEX_HANDLE.set(h.0 as isize); }
     }
+
+    taskbar_guard::spawn();
+    #[cfg(not(feature = "phone-link"))]
+    utils::migrate_legacy_settings();
 
     startup::begin();
     setup_brightness_worker();
@@ -186,6 +211,7 @@ fn main() {
             open_agent_session,
             agent_answer,
             claude_usage::claude_usage,
+            agent_api::claude_code_present,
             notifications::notch_notifications_access,
             notifications::notch_notifications_request_access,
             notifications::notch_notifications_open_privacy,
@@ -304,25 +330,45 @@ fn main() {
             ics::ics_add_link,
             ics::ics_remove_link,
             ics::ics_detect,
+            #[cfg(feature = "phone-link")]
             phone_link::phone_link_status,
+            #[cfg(feature = "phone-link")]
             phone_link::phone_link_devices,
+            #[cfg(feature = "phone-link")]
             phone_link::phone_link_sessions,
+            #[cfg(feature = "phone-link")]
             phone_link::phone_link_start_pairing,
+            #[cfg(feature = "phone-link")]
             phone_link::phone_link_cancel_pairing,
+            #[cfg(feature = "phone-link")]
             phone_link::phone_link_submit_code,
+            #[cfg(feature = "phone-link")]
             phone_link::phone_link_set_permissions,
+            #[cfg(feature = "phone-link")]
             phone_link::phone_link_end_session,
+            #[cfg(feature = "phone-link")]
             phone_link::phone_link_revoke,
+            #[cfg(feature = "phone-link")]
             phone_link::phone_link_revoke_all,
+            #[cfg(feature = "phone-link")]
             phone_link::phone_link_send,
+            #[cfg(feature = "phone-link")]
             phone_link::phone_link_url_answer,
+            #[cfg(feature = "phone-link")]
             phone_link::phone_link_reconnect,
+            #[cfg(feature = "phone-link")]
             phone_link::phone_link_set_download_dir,
+            #[cfg(feature = "phone-link")]
             phone_link::phone_link_set_limits,
+            #[cfg(feature = "phone-link")]
             phone_link::phone_link_open_audit_log,
+            #[cfg(feature = "phone-link")]
             phone_link::phone_link_send_pick,
+            #[cfg(feature = "phone-link")]
             phone_link::phone_link_targets,
+            #[cfg(feature = "phone-link")]
             phone_link::phone_link_transfers,
+            #[cfg(feature = "phone-link")]
             phone_link::phone_link_take_received,
             privacy::get_privacy_state,
             privacy::set_mic_muted
@@ -347,6 +393,7 @@ fn main() {
             hotkeys::start(app.handle().clone());
             privacy::start(app.handle().clone());
             agent_api::start(app.handle().clone());
+            #[cfg(feature = "phone-link")]
             phone_link::start(app.handle().clone());
             notifications::start(app.handle().clone());
             downloads::start(app.handle().clone());
@@ -469,7 +516,7 @@ fn main() {
                 let ah = app.handle().clone();
                 TrayIconBuilder::new()
                     .icon(app.default_window_icon().unwrap().clone())
-                    .tooltip("Nectar")
+                    .tooltip(identity::APP.display)
                     .menu(&menu)
                     .on_menu_event(move |_, event| match event.id().as_ref() {
                         "quit" => {

@@ -1,6 +1,6 @@
 import { motion, AnimatePresence, useAnimation } from "framer-motion";
 import { useEffect, useState, useCallback, useRef, useMemo, memo } from "react";
-import { listen } from "@tauri-apps/api/event";
+import { emit, listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import type { UpdateCheckResult } from "./updater";
@@ -8,6 +8,7 @@ import "./App.css";
 import "./components/ControlCenter.css";
 import "./surfaces.css";
 import { initTheme } from "./theme";
+import { WELCOME_KEY, welcomeState } from "./welcomeGate";
 import { PlayIcon, PauseIcon, SkipBackIcon, SkipForwardIcon, VolumeLowIcon, VolumeHighIcon, MusicNoteIcon } from "./icons";
 import { CompactMediaPlayer } from "./CompactMediaPlayer";
 import { artTheme, FALLBACK_THEME, type ArtTheme } from "./music/palette";
@@ -44,7 +45,7 @@ import { NotchNotificationCard, NOTICE_WIDTH, noticeHeight } from "./components/
 import { useNotchNotifications } from "./hooks/useNotchNotifications";
 import { useFontsLoaded } from "./hooks/useFontsLoaded";
 import { createAgentSessions, agentSessionKey } from "./agentSessions";
-import { agentBarRunKey, agentBarWidth, agentTimerTemplate, stickyWidth, type StickyWidth } from "./agentBarLayout";
+import { agentBarRunKey, agentBarWidth, agentTimerTemplate, stickyWidth, STICKY_HOLD_MS, type StickyWidth } from "./agentBarLayout";
 import { EMPTY_USAGE, parseUsageState, primaryWindow, sameUsageState, usageLevel, type UsageState } from "./claudeUsage";
 import type { WidgetConfig } from "./components/StatusWidgetConfig";
 import {
@@ -905,17 +906,19 @@ function App() {
       refreshDockMode();
 
       if (windowLabel === 'main') {
-        const firstRun = localStorage.getItem("nectar-first-run") === null;
-        if (firstRun) {
-          invoke<boolean>("get_autostart").then(enabled => {
-            if (!enabled) invoke("set_autostart", { enabled: true }).catch(() => { });
-          }).catch(() => { });
-          localStorage.setItem("nectar-first-run", "done");
+        // A fresh install asks first (welcome screen): no dock and no logon task before that.
+        const welcome = welcomeState({
+          setting: settings[WELCOME_KEY],
+          firstRunDone: localStorage.getItem("nectar-first-run") !== null,
+          tourSeen: localStorage.getItem("nectar-tour-seen") === "1" || String(settings["nectar-tour-seen"]) === "1",
+        });
+        localStorage.setItem("nectar-first-run", "done");
+        if (welcome === "adopt") {
+          invoke("save_setting", { key: WELCOME_KEY, value: "true" }).then(() => emit("weather-refresh", true)).catch(() => { });
         }
         const rawDockMode = getVal("nectar-dock-mode", "smart") as string;
         const dockMode = rawDockMode === "auto-hide" ? "smart" : rawDockMode;
         const syncWindows = async () => {
-          const dockEnabled = getVal("nectar-dock-enabled", "true") === "true";
           const resolvedNotchMode = await invoke<string>('get_notch_mode_for_window').catch(() => "fixed");
           await Promise.all([
             dockEnabled ? invoke("init_dock", { mode: dockMode }) : Promise.resolve(),
@@ -924,7 +927,7 @@ function App() {
           await invoke("sync_appbar");
         };
 
-        const dockEnabled = getVal("nectar-dock-enabled", "true") === "true";
+        let dockEnabled = getVal("nectar-dock-enabled", "true") === "true";
         const runDockInit = () => {
           // 1. Snappy initial sync
           setTimeout(syncWindows, 400);
@@ -954,7 +957,22 @@ function App() {
           }, 6000);
         };
 
-        runDockInitAfterSplash();
+        if (welcome === "show") {
+          const opened = settings[WELCOME_KEY] === "pending"
+            ? Promise.resolve()
+            : invoke("save_setting", { key: WELCOME_KEY, value: "pending" }).catch(() => { });
+          opened.then(() => invoke("open_settings_window")).catch(() => { });
+          const unlistenWelcome = listen("welcome-done", async () => {
+            unlistenWelcome.then((fn) => fn());
+            const fresh = await invoke<Record<string, unknown>>("load_settings").catch(() => ({} as Record<string, unknown>));
+            dockEnabled = String(fresh["nectar-dock-enabled"] ?? "true") === "true";
+            runDockInit();
+            emit("weather-refresh", true);
+            setTimeout(() => emit("start-tour"), 2500);
+          });
+        } else {
+          runDockInitAfterSplash();
+        }
       }
 
       const scaleVal = getVal("nectar-scale");
@@ -2142,7 +2160,15 @@ function App() {
   );
   const agentBarSticky = useRef<StickyWidth | null>(null);
   if (!agentFocus) agentBarSticky.current = null;
-  else if (agentBar) agentBarSticky.current = stickyWidth(agentBarSticky.current, agentBarRunKey(agentRun), agentBarFit);
+  else if (agentBar) agentBarSticky.current = stickyWidth(agentBarSticky.current, agentBarRunKey(agentRun), agentBarFit, Date.now());
+  // A held width shrinks only on a render; the timer text re-renders AgentBar alone, so wake App when the hold ends.
+  const [, setStickyWake] = useState(0);
+  const stickyShrinkAt = agentBar && agentBarSticky.current && agentBarSticky.current.width > agentBarFit ? agentBarSticky.current.seen + STICKY_HOLD_MS : 0;
+  useEffect(() => {
+    if (!stickyShrinkAt) return;
+    const id = setTimeout(() => setStickyWake((n) => n + 1), Math.max(0, stickyShrinkAt - Date.now()) + 20);
+    return () => clearTimeout(id);
+  }, [stickyShrinkAt]);
   const openAgent = (a: AgentActivity) => {
     invoke('open_agent_session', { window: a.window ?? null, session: a.session ?? null, host: a.host ?? null }).catch(() => { });
   };

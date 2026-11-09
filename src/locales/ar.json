@@ -282,7 +282,7 @@
   "about.hitbox": "تسجيل نقرات الشريط والنوتش",
   "about.hitbox.desc": "شغّله، وحرّك المؤشر فوق الشريط والنوتش لبضع ثوانٍ، ثم انسخ التشخيص. يُعاد ضبطه عند إعادة التشغيل",
   "about.danger.group": "منطقة الخطر",
-  "about.footer": "صُنع بـ ❤️ بواسطة kua8",
+  "about.footer": "مبني على Nectar من kua8، عدّله vekilberke",
   "calsync.guide.google.step1": "افتح تقويم Google على الويب (calendar.google.com).",
   "calsync.guide.google.step2": "مرّر المؤشر على التقويم في القائمة اليسرى، وانقر قائمة النقاط الثلاث ثم الإعدادات والمشاركة.",
   "calsync.guide.google.step3": "انزل إلى دمج التقويم وانسخ العنوان السري بصيغة iCal.",

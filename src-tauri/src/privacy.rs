@@ -33,6 +33,8 @@ pub const HOTKEY_SETTING: &str = "nectar-mic-mute-hotkey";
 /// Free on a stock Windows 11: Win+Alt+K is Windows' own call mute, Win+Alt+M Game Bar's mic,
 /// Win+Ctrl+M Magnifier settings, Ctrl+Alt+M a Word comment and Ctrl+Shift+M Teams' own mute.
 pub const DEFAULT_HOTKEY: &str = "Win+Ctrl+K";
+/// On by default only in the owner's own build (D-036); friends turn it on themselves (Q14).
+const HOTKEY_ON_BY_DEFAULT: bool = cfg!(feature = "phone-link");
 
 const CONSENT_STORE: &str = r"Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore";
 /// Only for a desktop app in use whose process can't be opened (elevated, or past the wait limit):
@@ -123,7 +125,7 @@ pub fn set_mic_muted(muted: bool) {
 /// The mute shortcut: missing means the default, an empty string means off.
 pub fn hotkey_from_setting(raw: Option<&str>) -> Option<String> {
     match raw {
-        None => Some(DEFAULT_HOTKEY.to_string()),
+        None => HOTKEY_ON_BY_DEFAULT.then(|| DEFAULT_HOTKEY.to_string()),
         Some(s) if s.trim().is_empty() => None,
         Some(s) => Some(s.trim().to_string()),
     }
@@ -790,7 +792,7 @@ mod tests {
 
     #[test]
     fn hotkey_setting_defaults_and_turns_off_when_empty() {
-        assert_eq!(hotkey_from_setting(None).as_deref(), Some(DEFAULT_HOTKEY));
+        assert_eq!(hotkey_from_setting(None).as_deref(), HOTKEY_ON_BY_DEFAULT.then_some(DEFAULT_HOTKEY));
         assert_eq!(hotkey_from_setting(Some("")), None);
         assert_eq!(hotkey_from_setting(Some("  ")), None);
         assert_eq!(hotkey_from_setting(Some(" Ctrl+Alt+F9 ")).as_deref(), Some("Ctrl+Alt+F9"));

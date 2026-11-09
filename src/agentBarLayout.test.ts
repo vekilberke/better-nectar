@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { AGENT_BAR_MAX, AGENT_BAR_MIN, agentBarRunKey, agentBarWidth, agentTimerTemplate, stickyWidth, type StickyWidth } from "./agentBarLayout";
+import { AGENT_BAR_MAX, AGENT_BAR_MIN, agentBarRunKey, agentBarWidth, agentTimerTemplate, stickyWidth, STICKY_HOLD_MS, type StickyWidth } from "./agentBarLayout";
 import { createAgentSessions } from "./agentSessions";
 import type { AgentActivity } from "./components/AgentStatus";
 
 describe("agent bar width (T-017)", () => {
   test("sums icon, status, timer and padding with no slack in the middle", () => {
-    expect(agentBarWidth({ status: 100, time: 30 })).toBe(14 * 2 + 16 + 8 + 100 + 8 + 30 + 2);
+    expect(agentBarWidth({ status: 100, time: 30 })).toBe(14 * 2 + 16 + 8 + 100 + 8 + 30 + 6);
   });
 
   test("a count badge adds its width and one gap", () => {
@@ -32,14 +32,33 @@ describe("agent bar width (T-017)", () => {
     expect(agentTimerTemplate(3_600_000)).toBe("0:00:00");
   });
 
-  test("width only grows within a run and resets for a new one", () => {
-    let s = stickyWidth(null, 1, 180);
-    s = stickyWidth(s, 1, 150);
+  test("width holds within a run and resets for a new one", () => {
+    let s = stickyWidth(null, 1, 180, 0);
+    s = stickyWidth(s, 1, 150, 100);
     expect(s.width).toBe(180);
-    s = stickyWidth(s, 1, 210);
+    s = stickyWidth(s, 1, 210, 200);
     expect(s.width).toBe(210);
-    s = stickyWidth(s, 2, 150);
-    expect(s).toEqual({ run: 2, width: 150 });
+    s = stickyWidth(s, 2, 150, 300);
+    expect(s).toEqual({ run: 2, width: 150, seen: 300 });
+  });
+
+  test("a held width shrinks to fit once the wide content has been gone for the hold time", () => {
+    let s = stickyWidth(null, 1, 300, 0);
+    s = stickyWidth(s, 1, 160, 1000);
+    expect(s.width).toBe(300);
+    s = stickyWidth(s, 1, 160, STICKY_HOLD_MS - 1);
+    expect(s.width).toBe(300);
+    s = stickyWidth(s, 1, 160, STICKY_HOLD_MS);
+    expect(s.width).toBe(160);
+  });
+
+  test("wide content coming back restarts the hold", () => {
+    let s = stickyWidth(null, 1, 300, 0);
+    s = stickyWidth(s, 1, 300, 2500);
+    s = stickyWidth(s, 1, 160, 4000);
+    expect(s.width).toBe(300);
+    s = stickyWidth(s, 1, 160, 2500 + STICKY_HOLD_MS);
+    expect(s.width).toBe(160);
   });
   test("a count of zero or an empty status still gives a width inside the bounds", () => {
     expect(agentBarWidth({ status: 0, time: 0, count: 0 })).toBe(AGENT_BAR_MIN);
@@ -57,7 +76,7 @@ describe("agent bar width (T-017)", () => {
   test("fractional text widths round up to a whole pixel", () => {
     const w = agentBarWidth({ status: 100.2, time: 30.3 });
     expect(Number.isInteger(w)).toBe(true);
-    expect(w).toBe(Math.ceil(14 * 2 + 16 + 8 + 100.2 + 8 + 30.3 + 2));
+    expect(w).toBe(Math.ceil(14 * 2 + 16 + 8 + 100.2 + 8 + 30.3 + 6));
   });
 
   test("width never shrinks as the status grows and stops at the maximum", () => {
@@ -77,10 +96,10 @@ describe("agent bar width (T-017)", () => {
     expect(agentTimerTemplate(100 * 3_600_000)).toBe("0:00:00");
   });
 
-  test("an equal width keeps the same sticky object and a new run can shrink", () => {
-    const a = stickyWidth(null, 5, 200);
-    expect(stickyWidth(a, 5, 200)).toBe(a);
-    expect(stickyWidth(a, 6, 150)).toEqual({ run: 6, width: 150 });
+  test("an equal width refreshes the hold and a new run can shrink", () => {
+    const a = stickyWidth(null, 5, 200, 0);
+    expect(stickyWidth(a, 5, 200, 50)).toEqual({ run: 5, width: 200, seen: 50 });
+    expect(stickyWidth(a, 6, 150, 50)).toEqual({ run: 6, width: 150, seen: 50 });
   });
 
   test("the width does not pulse while focus alternates between concurrent sessions (I-175)", () => {
@@ -97,7 +116,7 @@ describe("agent bar width (T-017)", () => {
       store.update(act(session, session === "a" ? { state: "tool", tool: "Bash" } : {}), 100 + i * 10);
       const view = store.view(100 + i * 10);
       focused.add(view.focus!.activity.session!);
-      sticky = stickyWidth(sticky, agentBarRunKey(view.run), fit[view.focus!.activity.session!]);
+      sticky = stickyWidth(sticky, agentBarRunKey(view.run), fit[view.focus!.activity.session!], 100 + i * 10);
       widths.push(sticky.width);
     }
     expect(focused.size).toBe(2);

@@ -12,7 +12,7 @@ use tauri::{AppHandle, Manager};
 use crate::caldav::{error_chain, unescape, unfold};
 use crate::calendar_sync::{self, link_key, CalEvent, SourceData, LOOKAHEAD_DAYS, LOOKBACK_DAYS};
 
-const KEYRING_SERVICE: &str = "Nectar Calendar Link";
+const KEYRING_SERVICE: &str = crate::identity::APP.ics_target;
 const LINKS_FILE: &str = "calendar_links.json";
 const MAX_BYTES: usize = 15 * 1024 * 1024;
 const MAX_LINKS: usize = 12;
@@ -60,7 +60,8 @@ fn secret(id: &str) -> Result<keyring::Entry, String> {
 }
 
 fn saved_url(id: &str) -> Option<String> {
-    secret(id).ok()?.get_password().ok()
+    let current = secret(id).ok()?;
+    current.get_password().ok().or_else(|| crate::identity::adopt_legacy_secret(&current, crate::identity::LEGACY.ics_target, id))
 }
 
 pub fn color_for(id: &str) -> String {

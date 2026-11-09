@@ -44,8 +44,6 @@ use tauri::{AppHandle, Listener, Manager};
 use tokio::sync::{mpsc, oneshot};
 
 pub const SETTING: &str = "nectar-phone-link";
-/// Settings import drops every key with this prefix (design section 11).
-pub const SETTING_PREFIX: &str = "nectar-phone-";
 
 struct Runtime {
     engine: Arc<Mutex<Engine>>,
@@ -420,33 +418,4 @@ pub fn phone_link_open_audit_log(app: AppHandle) -> Result<(), String> {
         std::fs::write(&path, "").map_err(|e| e.to_string())?;
     }
     tauri_plugin_opener::reveal_item_in_dir(&path).map_err(|e| e.to_string())
-}
-
-/// Removes `nectar-phone-*` keys from an imported settings file; returns the removed keys.
-pub fn strip_import(settings: &mut std::collections::HashMap<String, Value>) -> Vec<String> {
-    let mut removed: Vec<String> = settings.keys().filter(|k| k.starts_with(SETTING_PREFIX)).cloned().collect();
-    removed.sort();
-    for k in &removed {
-        settings.remove(k);
-    }
-    removed
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn import_drops_every_phone_link_key() {
-        let mut s: std::collections::HashMap<String, Value> = [
-            ("nectar-phone-link".to_string(), json!("true")),
-            ("nectar-phone-link-devices".to_string(), json!("[]")),
-            ("nectar-scale".to_string(), json!("1")),
-        ]
-        .into_iter()
-        .collect();
-        assert_eq!(strip_import(&mut s), vec!["nectar-phone-link", "nectar-phone-link-devices"]);
-        assert_eq!(s.len(), 1);
-        assert!(s.contains_key("nectar-scale"));
-    }
 }

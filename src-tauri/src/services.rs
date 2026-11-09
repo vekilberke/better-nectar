@@ -1857,6 +1857,10 @@ unsafe extern "system" fn capture_ui_enum_proc(hwnd: HWND, lparam: LPARAM) -> BO
     if *found { return BOOL(0); }
     if !IsWindowVisible(hwnd).as_bool() || IsIconic(hwnd).as_bool() { return BOOL(1); }
 
+    // Snipping Tool also keeps small windows up after a capture (the "Screenshot copied" box, quick markup)
+    // and its editor; only the full-monitor selection overlay should hide the notch and make the dock click-through.
+    if !is_capture_overlay(hwnd) { return BOOL(1); }
+
     let mut pid = 0u32;
     GetWindowThreadProcessId(hwnd, Some(&mut pid));
     if pid != 0 && pid != std::process::id() {
@@ -1883,6 +1887,33 @@ unsafe extern "system" fn capture_ui_enum_proc(hwnd: HWND, lparam: LPARAM) -> BO
     }
 
     BOOL(1)
+}
+
+/// A capture overlay covers its whole monitor and is either topmost or has no caption, unlike a maximized editor window.
+pub(crate) fn overlay_shape(win: (i32, i32, i32, i32), mon: (i32, i32, i32, i32), topmost: bool, caption: bool) -> bool {
+    let covers = win.0 <= mon.0 && win.1 <= mon.1 && win.2 >= mon.2 && win.3 >= mon.3;
+    covers && (topmost || !caption)
+}
+
+unsafe fn is_capture_overlay(hwnd: HWND) -> bool {
+    use windows::Win32::Foundation::RECT;
+    use windows::Win32::Graphics::Dwm::DWMWA_CLOAKED;
+    use windows::Win32::UI::WindowsAndMessaging::{GetWindowLongW, GetWindowRect, GWL_EXSTYLE, GWL_STYLE, WS_CAPTION, WS_EX_TOPMOST};
+    let mut cloaked = 0u32;
+    if DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, &mut cloaked as *mut _ as *mut _, 4).is_ok() && cloaked != 0 {
+        return false;
+    }
+    let mut r = RECT::default();
+    if GetWindowRect(hwnd, &mut r).is_err() { return false; }
+    let Some((mx, my, mw, mh)) = monitor_rect_for_hwnd(hwnd) else { return false };
+    let style = GetWindowLongW(hwnd, GWL_STYLE) as u32;
+    let ex_style = GetWindowLongW(hwnd, GWL_EXSTYLE) as u32;
+    overlay_shape(
+        (r.left, r.top, r.right, r.bottom),
+        (mx, my, mx + mw, my + mh),
+        ex_style & WS_EX_TOPMOST.0 != 0,
+        style & WS_CAPTION.0 == WS_CAPTION.0,
+    )
 }
 
 fn is_capture_ui_present() -> bool {
@@ -3870,6 +3901,11 @@ unsafe extern "system" fn display_monitor_proc(
             }
             DefWindowProcW(hwnd, msg, wparam, lparam)
         }
+        // Explorer keeps the auto-hide state across logoff; give back the user's own, keep the marker.
+        WM_ENDSESSION if wparam.0 != 0 => {
+            crate::utils::restore_taskbar_state_for_session_end();
+            LRESULT(0)
+        }
         _ => DefWindowProcW(hwnd, msg, wparam, lparam),
     }
 }
@@ -3994,8 +4030,21 @@ fn recover_from_webview_failure(handle: &AppHandle) {
 
 #[cfg(test)]
 mod tests {
-    use super::{css_rect_on_screen, dock_edge_hover_allowed, flyout_press_dismisses, is_helper_name, is_launchable_entry, is_windows_shell_launcher_process, win_number_index};
+    use super::{css_rect_on_screen, dock_edge_hover_allowed, flyout_press_dismisses, is_helper_name, is_launchable_entry, is_windows_shell_launcher_process, overlay_shape, win_number_index};
     use crate::types::IntRect;
+
+    #[test]
+    fn only_a_full_monitor_snip_overlay_counts_as_capture_ui() {
+        let mon = (0, 0, 1920, 1080);
+        assert!(overlay_shape((0, 0, 1920, 1080), mon, true, false));
+        assert!(overlay_shape((0, 0, 1920, 1080), mon, false, false));
+        // The "Screenshot copied" box and quick markup are small.
+        assert!(!overlay_shape((760, 8, 1160, 56), mon, true, false));
+        // A maximized editor overhangs the monitor but has a caption and is not topmost.
+        assert!(!overlay_shape((-8, -8, 1928, 1088), mon, false, true));
+        assert!(overlay_shape((1920, 0, 4480, 1440), (1920, 0, 4480, 1440), true, true));
+        assert!(!overlay_shape((1920, 0, 4480, 1400), (1920, 0, 4480, 1440), true, false));
+    }
 
     #[test]
     fn flyout_rect_maps_css_px_to_screen() {

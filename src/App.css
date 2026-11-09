@@ -2909,6 +2909,12 @@ img {
     color: var(--nectar-text, #fff);
 }
 
+/* Sized by agentsPanelHeight (EMPTY_H): one line, never squeezed by the flex column. */
+.agents-panel > .clip-empty {
+    flex: none;
+    white-space: nowrap;
+}
+
 .agents-chips {
     flex: 0 0 auto;
     height: 24px;

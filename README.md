@@ -1,213 +1,77 @@
 # Better Nectar
 
-An unofficial fork of [Nectar](https://github.com/kua8/Nectar) by kua8 (GPL-3.0) with extra features: clipboard history, Claude Code status and usage in the notch, a pixel cat, notifications, downloads, mic/camera indicator and meeting mode, a hybrid dock, and more. See [NOTICE](NOTICE).
+**A notch and a dock for Windows.** Better Nectar is an unofficial, modified version of [Nectar](https://github.com/kua8/Nectar) by kua8. It is not affiliated with or endorsed by kua8. Bugs in Better Nectar belong here, not in the Nectar repository.
 
-Installers and in-app updates are coming. Until then, build from source (see below).
+## What is different from Nectar
 
----
+- **Claude Code in the notch:** every Claude Code session with its state, permission requests you can answer from the notch, a usage meter, and a pixel cat that reacts to the agents.
+- **Clipboard history** (text and images) and a redesigned shelf and clipboard panel.
+- **Dock system area:** tray, network, volume, clock and date, notifications and a mini player, with Nectar menus instead of Windows Quick Settings, and a hybrid dock mode.
+- **Notch notifications, downloads in the notch, a microphone and camera in-use dot, and a meeting-mode hotkey** that mutes every microphone.
+- **A first-start screen:** nothing touches your taskbar, logon tasks or location until you choose.
+- **Its own name, settings folder and updates**, so it never collides with an installed Nectar. Quit Nectar before you start Better Nectar; the two do not run side by side.
 
-<div align="center">
-
-<img src="docs/logo.png" width="128" alt="Nectar logo" />
-
-<br />
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/wordmark-dark.png" />
-  <img src="docs/wordmark-light.png" height="44" alt="Nectar" />
-</picture>
-
-<p><strong>A notch and a dock for Windows.<br />Physics-animated, reactive, and built to replace your taskbar.</strong></p>
-
-[![Latest release](https://shieldcn.dev/badge/release-v1.9.3.svg?logo=lu:Tag)](https://github.com/kua8/Nectar/releases/latest)
-[![Downloads](https://badges.kua8.lol/downloads.svg)](https://github.com/kua8/Nectar/releases)
-[![License](https://shieldcn.dev/github/license/kua8/Nectar.svg?logo=lu:Scale)](LICENSE)
-[![Platform](https://shieldcn.dev/badge/platform-Windows.svg?logo=ri:FaWindows)](https://www.microsoft.com/windows)
-
-[**Download**](https://github.com/kua8/Nectar/releases/latest) &nbsp;·&nbsp; [Features](#features) &nbsp;·&nbsp; [Install](#install) &nbsp;·&nbsp; [Settings](SETTINGS.md) &nbsp;·&nbsp; [Report a bug](https://github.com/kua8/Nectar/issues/new/choose)
-
-<br />
-
-<img src="docs/screenshots/desktop.webp" width="860" alt="Nectar's notch and dock on a Windows desktop" />
-
-<br /><br />
-
-<a href="https://nectar.kua8.lol/trailer/">
-  <img src="docs/trailer-preview.svg" width="860" alt="Watch Nectar in action — 40-second trailer" />
-</a>
-
-[**▶ Watch Nectar in action**](https://nectar.kua8.lol/trailer/) · 40 seconds
-
-</div>
-
-<br />
-
-> **Disclaimer:** I'm a solo dev and I really DID NOT expect this sudden traction for Nectar. I really appreciate the recent support, and I'm trying my best to release fixes as quickly as possible to keep you all happy. But fixing one issue often causes another one. So moving forward I'll do weekly releases with stable builds, plus a pre-release for smaller fixes, and a toggle to decide which version of Nectar you run. This gives me time to search through all the bugs, find the most critical ones, and also have a private life. Thank you for understanding.
-
-> **Antivirus warnings:** We've been getting a lot of reports of Windows, Avast and Kaspersky marking Nectar's exe as a trojan or malware. This happens because Nectar isn't code-signed, and code signing certificates are pretty pricey. We're going to try to enroll in Kaspersky's [Allowlist program](https://www.kaspersky.com/partners/allowlist-program), which can take a while depending on how fast they are. Like I've said before, Nectar is open source: anyone can go through the code line by line and compile it themselves. I make no money from this project and there is no telemetry or tracking in it. There's a saying, "if it's free, you're the product", and that isn't the case here. I purely enjoy making small projects on the side.
->
-> If you'd like to help, I'd appreciate any donations through the Buy Me a Coffee link at the bottom of this README or in the side panel. They go towards the signing certificate. If 15 people sent a dollar a month, it would help a lot.
-
-## Features
-
-| What you get | How |
-| --- | --- |
-| **A notch that does things** | Music, a Control Center you arrange yourself, status, a calendar and a file shelf in one spring-animated island. |
-| **A dock that replaces your taskbar** | Mirrors your real taskbar, same pinned apps and order, with real icons and names, and a dot on apps that want your attention. |
-| **Native where it counts** | The tray opens the real Windows flyout, and Quit ends an app like Task Manager's End task. |
-| **Out of your way** | Fixed, Smart or Peek modes, and both stay hidden over fullscreen games. |
-| **Made for your setup** | Every monitor, one monitor, or a specific one. Solid, glass or Material You styles with your own accent color. English and Turkish. Every option lives in a plain `settings.json`. |
-| **Light on the system** | Audio capture, cursor tracking and thumbnail work pause themselves when nothing needs them. |
-
-<div align="center">
-<table>
-  <tr>
-    <td align="center"><img src="docs/screenshots/island.png" height="130" alt="The Nectar notch" /></td>
-    <td align="center"><img src="docs/screenshots/dock.png" height="130" alt="The Nectar dock" /></td>
-  </tr>
-  <tr>
-    <td align="center"><sub>The notch</sub></td>
-    <td align="center"><sub>The dock</sub></td>
-  </tr>
-</table>
-</div>
+Not in this version: Nectar's phone link (phone ↔ PC transfer). It is single-owner today and may come back later.
 
 ## Install
 
-1. Download the installer from the [latest release](https://github.com/kua8/Nectar/releases/latest).
-2. Choose **Just me** or **All users**. An all-users install asks for administrator permission once.
-3. Nectar starts with a short splash, then the notch and dock appear together.
+1. Download `better-nectar_<version>_x64-setup.exe` from the [latest release](https://github.com/vekilberke/better-nectar/releases/latest).
+2. Run it. It installs for your user only and needs no administrator rights.
+3. Windows SmartScreen warns you, because the installer is not code-signed: choose **More info › Run anyway**.
+4. On first start, pick what you want (dock, start with Windows, weather location, clock, Claude Code). Everything can be changed later in Settings.
 
-Nectar updates itself: a green dot on the notch means an update is ready, and **Auto Update** in **Settings › About** installs it for you. Turn on **Get pre-releases** there to receive early builds before the weekly release. **Uninstall** from Windows Settings › Apps or from **Settings › About**, either puts your taskbar back.
+**Smart App Control:** on Windows 11 with Smart App Control on (including its evaluation mode on new installs), unsigned apps are blocked outright and there is no "Run anyway". Better Nectar cannot be installed on such a PC until it is code-signed. Do not turn Smart App Control off for it: Windows only lets you turn it back on by reinstalling Windows.
+
+**Windows versions:** Windows 11 is supported. Windows 10 22H2 is best effort.
+
+Better Nectar updates itself from this repository's releases: a dot on the notch means an update is ready, and **Settings › About** installs it. Turn on **Get pre-releases** there to receive test builds first.
 
 <details>
 <summary>Verify your download</summary>
 
 <br />
 
-Only download Nectar from the [releases page](https://github.com/kua8/Nectar/releases) of this repository. Each release has a `SHA256SUMS.txt`. Compare the output of this command with the matching line:
+Only download Better Nectar from the [releases page](https://github.com/vekilberke/better-nectar/releases). Each release has a `SHA256SUMS.txt`; compare it with:
 
 ```powershell
-Get-FileHash .\Nectar-Setup-<version>.exe -Algorithm SHA256
+Get-FileHash .\better-nectar_<version>_x64-setup.exe -Algorithm SHA256
 ```
 
 </details>
+
+## Uninstall
+
+Windows **Settings › Apps › Installed apps › Better Nectar › Uninstall**, or **Settings › About › Uninstall** in the app. Uninstalling puts the taskbar back, removes the logon task, and removes Better Nectar's Claude Code hooks and status line (a status line you had before comes back). Your settings stay in `%APPDATA%\io.github.vekilberke.betternectar` in case you reinstall; delete that folder to remove them too.
+
+## Getting the taskbar back
+
+Better Nectar hides the Windows taskbar while the dock is on. If the app stops without putting it back:
+
+1. Start menu › **Restore Windows taskbar (Better Nectar)**, or start Better Nectar again (it restores the taskbar on start).
+2. If that does not help: Task Manager › **Windows Explorer** › Restart, then Settings › Personalization › Taskbar › Taskbar behaviors › turn **Automatically hide the taskbar** off.
 
 ## Usage
 
-**Notch panels.** Scroll or swipe on the notch to change panel.
+**Notch panels.** Scroll or swipe on the notch, or use the tab strip, to change panel: Control Center, music, status, calendar, shelf, clipboard and AI agents.
 
-| Panel | What it does |
-| --- | --- |
-| **Music** | Album art, track info, playback controls, a visualizer, and a switch between several playing apps. |
-| **Control Center** | Wi-Fi, Bluetooth, Do Not Disturb, volume and brightness. Drag tiles, buttons and sliders into your own layout. |
-| **Status** | Battery (hidden on desktops without one) and weather, in a layout you choose. |
-| **Calendar** | Day, week, month and agenda views, a timer, a stopwatch and Pomodoro. |
-| **Shelf** | Drop files or text on the notch and drag them out later. |
+**Visibility modes.** The notch and the dock each have **Fixed** (always visible), **Smart** (hides when a window overlaps it, reveals on hover) and **Peek** (hidden until the cursor reaches the edge). In Smart and Peek both stay hidden over fullscreen apps.
 
-**Visibility modes.** The notch and the dock each have their own.
+**Claude Code.** Settings › Notch › AI agents. With Claude Code installed, Better Nectar adds its hooks to `~/.claude/settings.json` (the original file is kept as `settings.json.nectar-backup`) and removes them when you turn it off. See [docs/agents.md](docs/agents.md).
 
-| Mode | Behavior |
-| --- | --- |
-| **Fixed** | Always visible. The dock reserves screen space like a normal taskbar. |
-| **Smart** | Hides when another window overlaps it and reveals on hover. |
-| **Peek** | Hidden until the cursor reaches the screen edge, or a media event arrives. |
+All settings are documented in [SETTINGS.md](SETTINGS.md).
 
-In Smart and Peek both stay hidden, and click-through, while a fullscreen app is in front.
+## Reporting a bug
 
-**Multiple monitors.** Under **Show On**, pick **Primary Monitor** (the default), **All Monitors** or a **Specific Monitor** for the dock and the notch separately. Each extra monitor gets its own windows, so **All Monitors** uses more memory than a single display.
-
-## Troubleshooting
-
-<details>
-<summary><b>The dock shows over my game</b></summary>
-
-<br />
-
-Nectar hides the dock and notch over a fullscreen window that covers the whole monitor, in Smart and Peek. Fixed mode stays visible by design. If something still appears, open an issue with the game and its display mode (fullscreen, borderless or windowed).
-
-</details>
-
-<details>
-<summary><b>The Windows taskbar did not come back</b></summary>
-
-<br />
-
-Start Nectar again, it restores the taskbar on launch even after a crash. Uninstalling from Windows Settings › Apps or from **Settings › About** brings it back too.
-
-</details>
-
-<details>
-<summary><b>Nectar uses a lot of memory</b></summary>
-
-<br />
-
-Every window runs in its own WebView2 process, so each monitor adds a notch and a dock. Set **Show On** to one monitor to cut it down.
-
-</details>
-
-<details>
-<summary><b>Brightness does not change on my external monitor</b></summary>
-
-<br />
-
-External monitors are controlled over DDC/CI. Turn DDC/CI on in the monitor's own menu, and connect it directly if you use a dock or adapter, since some do not pass it on.
-
-</details>
-
-<details>
-<summary><b>Something else is broken</b></summary>
-
-<br />
-
-Open **Settings › About › Copy Diagnostics** and paste the result into a [bug report](https://github.com/kua8/Nectar/issues/new/choose). It includes your versions, monitors and recent log.
-
-</details>
+Open an [issue](https://github.com/vekilberke/better-nectar/issues/new/choose). **Settings › About › Copy Diagnostics** helps a lot: it has your versions, monitors and recent log, with your user name, folders and location removed. Read it before you post it, or send it privately if you prefer.
 
 ## Build from source
 
-You need [Rust](https://rustup.rs/) and [Bun](https://bun.sh/) on Windows.
+See [BUILDING.md](BUILDING.md).
 
-```bash
-git clone https://github.com/kua8/Nectar.git
-cd Nectar
-bun install
-bun run tauri dev
-```
+## License and credits
 
-`bun run tauri build` makes a release build. Before a pull request, read [CONTRIBUTING.md](CONTRIBUTING.md).
+Better Nectar is free software under the [GNU General Public License v3.0](LICENSE), with no warranty. See [NOTICE](NOTICE) for what was changed and when, and [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) for the libraries it ships.
 
-## Roadmap
-
-These are ideas under consideration, not promises.
-
-- [ ] Background tray programs (antivirus, VPN) in the notch
-- [ ] Lower memory use, with Settings loaded on demand
-- [ ] Code signing for the installer
-- [x] Stable and pre-release update channels
-- [x] Multiple media sessions, Task Manager in the dock menu, show desktop corner
-
-See the [open issues](https://github.com/kua8/Nectar/issues) for requests and known bugs.
-
-## Built with
-
-[![Tauri](https://img.shields.io/badge/Tauri-24C8D8?style=for-the-badge&logo=tauri&logoColor=white)](https://tauri.app/)
-[![Rust](https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org/)
-[![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
-
-## Support
-
-Nectar is free and open source. If it makes your desktop nicer, you can support its development.
-
-[![Sponsor](https://img.shields.io/badge/Sponsor-EA4AAA?style=for-the-badge&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/kua8)
-[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/kua8)
-
-## License
-
-Nectar is open source under the [GPLv3](LICENSE).
-
-## Credits
-
-Nectar began as a fork of [Bloom](https://github.com/SehajveerSingh2005/bloom) by Sehajveer Singh, and the original concept and the codebase it grew from are theirs. Nectar has since been rebuilt and is maintained independently, with its own features, fixes and direction. Thanks to everyone listed on the [contributors page](https://github.com/kua8/Nectar/graphs/contributors).
+- Based on [Nectar](https://github.com/kua8/Nectar) by kua8 (v1.9.3).
+- Nectar began as a fork of [Bloom](https://github.com/SehajveerSingh2005/bloom) by Sehajveer Singh.
+- The pixel cat is based on SondeR cat by Verisonder (Apache-2.0, see `third_party/sonder-cat/`). The cat is not the product's logo.

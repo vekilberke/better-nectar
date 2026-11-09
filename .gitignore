@@ -31,3 +31,6 @@ dist-ssr
 # Marketing site — hosted separately (Apache, own domain), not part of this repo
 /website/
 
+
+# Copied by scripts/release.ps1 for the NSIS installer (tauri.release.conf.json)
+/src-tauri/runtime/

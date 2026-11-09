@@ -265,9 +265,9 @@ pub(crate) mod tests {
 
     #[test]
     fn happy_path() {
-        let mut offer = Offer::new("MY-PC", 1000);
-        let url = offer.qr_url("https://vekilberke.github.io/nectar-phone/", "qziazuduzrdqnnwdlxqb");
-        assert!(url.starts_with("https://vekilberke.github.io/nectar-phone/#v1."));
+        let mut offer = Offer::new("TEST-PC", 1000);
+        let url = offer.qr_url("https://example.github.io/phone/", "abcdefghijklmnopqrst");
+        assert!(url.starts_with("https://example.github.io/phone/#v1."));
         let phone = PhonePairing::from_qr(&url, UID);
         assert_eq!(crypto::pair_topic(&phone.ps), offer.pair_topic);
         let req = offer.on_hello(&phone.hello("Galaxy S26"), 1001);
@@ -318,7 +318,7 @@ pub(crate) mod tests {
     #[test]
     fn qr_renders_and_names_are_cleaned() {
         let offer = Offer::new("A\u{0007}B", 0);
-        let url = offer.qr_url("https://vekilberke.github.io/nectar-phone/", "qziazuduzrdqnnwdlxqb");
+        let url = offer.qr_url("https://example.github.io/phone/", "abcdefghijklmnopqrst");
         assert!(url.len() < 400, "{}", url.len());
         assert!(qr_svg_data_uri(&url).unwrap().starts_with("data:image/svg+xml;base64,"));
         let frag = url.split_once("#v1.").unwrap().1;

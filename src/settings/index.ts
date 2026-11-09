@@ -8,5 +8,4 @@ export { DockTab } from "./DockTab";
 export { OverlaysTab } from "./OverlaysTab";
 export { ProcessesTab } from "./ProcessesTab";
 export { AboutTab } from "./AboutTab";
-export { PhoneLinkTab } from "./PhoneLinkTab";
 export type { WidgetConfig, SettingsTab, SettingRowProps } from "./types";

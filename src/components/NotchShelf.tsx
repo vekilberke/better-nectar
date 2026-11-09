@@ -6,6 +6,7 @@ import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { AnimatePresence, MotionConfig, Reorder } from "framer-motion";
 import { ArrowDownToLine, Copy, Download, Smartphone, Trash2, X } from "lucide-react";
 import { useT } from "../i18n";
+import { PHONE_LINK } from "../buildFlags";
 import { truncateName } from "../fileKinds";
 import { FileArt } from "./FileArt";
 import { HScrollArrows, useHScroll } from "./HScroll";
@@ -143,7 +144,9 @@ export function useShelf(windowLabel: string, enabled: boolean, persist: boolean
       else if (r.text) add(undefined, r.text, key);
     };
     // Anything that came while no notch was listening (the first mailbox scan at startup).
-    const takeReceived = () => { invoke<PhoneReceived[]>("phone_link_take_received").then((list) => list.forEach(addReceived)).catch(() => { }); };
+    const takeReceived = PHONE_LINK
+      ? () => { invoke<PhoneReceived[]>("phone_link_take_received").then((list) => list.forEach(addReceived)).catch(() => { }); }
+      : () => { };
     takeReceived();
 
     const unlistens: Promise<() => void>[] = [
@@ -164,13 +167,15 @@ export function useShelf(windowLabel: string, enabled: boolean, persist: boolean
         setDropActive(false);
         if (e.payload.label === windowLabel) cbRef.current.onDrop();
       }),
-      // Files and text from a paired phone land on the shelf like a drop (design 7.2).
-      listen<PhoneReceived>("phone-link-received", (e) => {
-        addReceived(e.payload);
-        takeReceived();
-      }),
       listen<{ path: string }>("download-finished", (e) => add([e.payload.path])),
     ];
+    if (PHONE_LINK) {
+      // Files and text from a paired phone land on the shelf like a drop (design 7.2).
+      unlistens.push(listen<PhoneReceived>("phone-link-received", (e) => {
+        addReceived(e.payload);
+        takeReceived();
+      }));
+    }
     return () => { unlistens.forEach((u) => u.then((fn) => fn())); };
   }, [enabled, windowLabel, add]);
 
@@ -196,8 +201,12 @@ const CARD_SPRING = { type: "spring", stiffness: 520, damping: 34 } as const;
 
 type PhoneTarget = { id: string; name: string; files: boolean; text: boolean; online: boolean };
 
+const NO_TARGETS: PhoneTarget[] = [];
+
 /** Paired phones that may receive from this PC; empty while the phone link is off. */
-function usePhoneTargets() {
+const usePhoneTargets = PHONE_LINK ? usePairedPhones : () => NO_TARGETS;
+
+function usePairedPhones() {
   const [targets, setTargets] = useState<PhoneTarget[]>([]);
   useEffect(() => {
     const load = () => { invoke<PhoneTarget[]>("phone_link_targets").then(setTargets).catch(() => setTargets([])); };
@@ -236,17 +245,19 @@ export function NotchShelf({ items, dropActive, onReorder, onRemove, onClear, on
     return usable.find((p) => p.online) ?? usable[0];
   };
 
-  const sendOne = async (item: ShelfItem): Promise<"sent" | "queued" | "failed"> => {
-    const target = targetFor(item);
-    if (!target) return "failed";
-    const args = item.kind === "file" ? { deviceId: target.id, path: item.path } : { deviceId: target.id, text: item.text };
-    try {
-      const r = await invoke<{ queued?: boolean }>("phone_link_send", args);
-      return r?.queued ? "queued" : "sent";
-    } catch {
-      return "failed";
+  const sendOne = PHONE_LINK
+    ? async (item: ShelfItem): Promise<"sent" | "queued" | "failed"> => {
+      const target = targetFor(item);
+      if (!target) return "failed";
+      const args = item.kind === "file" ? { deviceId: target.id, path: item.path } : { deviceId: target.id, text: item.text };
+      try {
+        const r = await invoke<{ queued?: boolean }>("phone_link_send", args);
+        return r?.queued ? "queued" : "sent";
+      } catch {
+        return "failed";
+      }
     }
-  };
+    : async (_item: ShelfItem): Promise<"sent" | "queued" | "failed"> => "failed";
 
   const noteFor = (result: "sent" | "queued" | "failed") =>
     result === "queued" ? t("shelf.queuedForPhone") : result === "sent" ? t("shelf.sentToPhone") : t("shelf.sendFailed");

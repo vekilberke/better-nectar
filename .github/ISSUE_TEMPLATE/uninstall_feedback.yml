@@ -1,5 +1,5 @@
 name: Uninstall feedback
-description: Tell us why you removed Nectar (opened from the uninstaller)
+description: Tell us why you removed Better Nectar
 title: "Uninstall feedback"
 labels: ["feedback"]
 body:
@@ -22,4 +22,4 @@ body:
   - type: input
     id: version
     attributes:
-      label: Nectar version
+      label: Better Nectar version

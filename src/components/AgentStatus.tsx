@@ -71,8 +71,9 @@ function AgentElapsed({ run, busy }: { run: AgentRun; busy: boolean }) {
   return <>{formatStopwatch(Math.max(0, until - run.since), false)}</>;
 }
 
-export function agentBarStatus(t: ReturnType<typeof useT>, { state, tool }: AgentActivity) {
-  return state === "tool" ? (tool ? `${t("agent.tool")}: ${tool}` : t("agent.tool")) : t(`agent.${state}`);
+export function agentBarStatus(t: ReturnType<typeof useT>, { state }: AgentActivity) {
+  // The collapsed bar stays on the state; the tool and its target are in the agents panel.
+  return t(`agent.${state === "tool" ? "working" : state}`);
 }
 
 interface AgentBarProps {

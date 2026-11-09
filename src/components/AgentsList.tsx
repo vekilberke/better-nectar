@@ -5,7 +5,7 @@ import { setVisibleInterval } from "../hooks/visibleInterval";
 import { agentGroup, canOpenAgent, summarizeAgents, type AgentGroup, type AgentSession } from "../agentSessions";
 import { MASCOT, type AgentActivity } from "./AgentStatus";
 import { UsageMeter } from "./UsageMeter";
-import type { UsageState } from "../claudeUsage";
+import { primaryWindow, type UsageState } from "../claudeUsage";
 
 const ROW_H = 44;
 const ASK_ROW_H = 98;
@@ -13,10 +13,12 @@ const ROW_GAP = 3;
 const VISIBLE_ROWS = 3;
 const HEAD_H = 36;
 const CHIPS_H = 24;
+const EMPTY_H = 40;
 
 /** Notch panel height for the agents panel, tab strip excluded. */
 export function agentsPanelHeight(sessions: readonly AgentSession[], usage = false) {
-  if (sessions.length === 0) return usage ? 112 : 96;
+  // Panel padding 4 + 10, dashed pill 12px * 1.35 + 20 padding + 2 border, chips row 24 + 6 gap.
+  if (sessions.length === 0) return HEAD_H + 4 + (usage ? CHIPS_H + 6 : 0) + EMPTY_H + 10;
   const rows = sessions.slice(0, VISIBLE_ROWS).map((s) => (s.activity.ask ? ASK_ROW_H : ROW_H));
   return HEAD_H + 4 + CHIPS_H + 6 + rows.reduce((a, b) => a + b, 0) + (rows.length - 1) * ROW_GAP + 10;
 }
@@ -82,7 +84,7 @@ export function AgentsList({ sessions, onOpen, onAnswer, onClear, usage }: Agent
   if (sessions.length === 0) {
     return (
       <div className="agents-panel">
-        {usage && (
+        {primaryWindow(usage, Date.now()) && (
           <div className="agents-chips">
             <UsageMeter usage={usage} />
           </div>

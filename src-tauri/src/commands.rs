@@ -2082,10 +2082,30 @@ pub fn open_quick_settings() {
     std::thread::spawn(|| send_win_chord(windows::Win32::UI::Input::KeyboardAndMouse::VK_A));
 }
 
-/// Win+N, the notification center with the calendar.
+fn windows_build() -> Option<u32> {
+    use windows::core::PCWSTR;
+    use windows::Win32::System::Registry::{RegGetValueW, HKEY_LOCAL_MACHINE, RRF_RT_REG_SZ};
+    let key = crate::uninstall_registry::wide(r"SOFTWARE\Microsoft\Windows NT\CurrentVersion");
+    let name = crate::uninstall_registry::wide("CurrentBuildNumber");
+    let mut buf = [0u16; 32];
+    let mut len = (buf.len() * 2) as u32;
+    unsafe { RegGetValueW(HKEY_LOCAL_MACHINE, PCWSTR(key.as_ptr()), PCWSTR(name.as_ptr()), RRF_RT_REG_SZ, None, Some(buf.as_mut_ptr() as *mut _), Some(&mut len)) }.ok().ok()?;
+    let end = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
+    String::from_utf16_lossy(&buf[..end]).trim().parse().ok()
+}
+
+/// The notification center: Win+N on Windows 11, the Action Center (Win+A) on Windows 10.
+fn notification_chord(build: Option<u32>) -> windows::Win32::UI::Input::KeyboardAndMouse::VIRTUAL_KEY {
+    use windows::Win32::UI::Input::KeyboardAndMouse::{VK_A, VK_N};
+    match build {
+        Some(b) if b < 22000 => VK_A,
+        _ => VK_N,
+    }
+}
+
 #[tauri::command]
 pub fn open_notification_panel() {
-    std::thread::spawn(|| send_win_chord(windows::Win32::UI::Input::KeyboardAndMouse::VK_N));
+    std::thread::spawn(|| send_win_chord(notification_chord(windows_build())));
 }
 
 #[tauri::command]
@@ -2957,10 +2977,12 @@ pub fn save_setting(app: AppHandle, key: String, value: serde_json::Value) -> Re
         crate::dock_hybrid::on_setting_changed(&app);
     }
 
+    #[cfg(feature = "phone-link")]
     if key == crate::phone_link::SETTING {
         crate::phone_link::on_setting_changed(&app, &settings[&key]);
     }
 
+    #[cfg(feature = "phone-link")]
     if key == crate::phone_link::clip_sync::SETTING {
         crate::phone_link::clip_sync::refresh(&app);
     }
@@ -3845,10 +3867,10 @@ pub fn import_settings(app: AppHandle, settings: String) -> Result<(), String> {
     let mut imported: HashMap<String, serde_json::Value> =
         serde_json::from_str(&settings).map_err(|e| format!("Invalid JSON: {}", e))?;
     // An import can neither turn the phone link on nor change it: keep the current values.
-    crate::phone_link::strip_import(&mut imported);
+    crate::utils::strip_import(&mut imported);
     if let Some(cache) = crate::state::SETTINGS_CACHE.get() {
         if let Ok(current) = cache.lock() {
-            for (k, v) in current.iter().filter(|(k, _)| k.starts_with(crate::phone_link::SETTING_PREFIX)) {
+            for (k, v) in current.iter().filter(|(k, _)| k.starts_with(crate::utils::PHONE_SETTING_PREFIX)) {
                 imported.insert(k.clone(), v.clone());
             }
         }
@@ -3976,9 +3998,11 @@ pub fn setup_settings_watcher(app: AppHandle) {
                         // Lock dropped — safe to emit without blocking save_setting
                         for (key, value) in &changed {
                             crate::privacy::on_setting_changed(key);
+                            #[cfg(feature = "phone-link")]
                             if key == crate::phone_link::SETTING {
                                 crate::phone_link::on_setting_changed(&app, value);
                             }
+                            #[cfg(feature = "phone-link")]
                             if key == crate::phone_link::clip_sync::SETTING {
                                 crate::phone_link::clip_sync::refresh(&app);
                             }
@@ -3995,9 +4019,11 @@ pub fn setup_settings_watcher(app: AppHandle) {
                         }
                         for key in removed {
                             crate::privacy::on_setting_changed(&key);
+                            #[cfg(feature = "phone-link")]
                             if key == crate::phone_link::SETTING {
                                 crate::phone_link::on_setting_changed(&app, &serde_json::Value::Null);
                             }
+                            #[cfg(feature = "phone-link")]
                             if key == crate::phone_link::clip_sync::SETTING {
                                 crate::phone_link::clip_sync::refresh(&app);
                             }
@@ -4595,5 +4621,19 @@ mod network_status_tests {
     fn ethernet_and_offline() {
         assert_eq!(classify_network(None, true), NetworkStatus { kind: "ethernet", signal: 0 });
         assert_eq!(classify_network(None, false), NetworkStatus { kind: "none", signal: 0 });
+    }
+}
+
+#[cfg(test)]
+mod bell_tests {
+    use super::notification_chord;
+    use windows::Win32::UI::Input::KeyboardAndMouse::{VK_A, VK_N};
+
+    #[test]
+    fn windows_10_opens_the_action_center() {
+        assert_eq!(notification_chord(Some(19045)), VK_A);
+        assert_eq!(notification_chord(Some(22000)), VK_N);
+        assert_eq!(notification_chord(Some(26200)), VK_N);
+        assert_eq!(notification_chord(None), VK_N);
     }
 }

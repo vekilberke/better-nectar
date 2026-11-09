@@ -1,7 +1,7 @@
 
 use std::os::windows::ffi::OsStrExt;
 use std::os::windows::process::CommandExt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use windows::Win32::Foundation::{CloseHandle, HANDLE};
 use windows::Win32::Security::{GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY};
 use windows::Win32::System::Registry::{
@@ -14,12 +14,11 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 use windows::core::PCWSTR;
 
-use crate::uninstall_registry::{
-    desktop_dir, legacy_start_menu_dir, start_menu_programs_dir, wide, UNINSTALL_SUBKEY,
-};
+use crate::identity::APP;
+use crate::uninstall_registry::{desktop_dir, legacy_start_menu_dir, start_menu_programs_dir, wide};
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-const TITLE: &str = "Nectar";
+const TITLE: &str = APP.display;
 
 pub fn requested() -> bool {
     let by_arg = std::env::args().skip(1).any(|a| a == "--uninstall");
@@ -78,10 +77,11 @@ fn run_hidden(program: &str, args: &[&str]) -> Option<String> {
 
 fn stop_running_nectar() {
     let not_self = format!("PID ne {}", std::process::id());
-    let filters = ["/FI", "IMAGENAME eq nectar.exe", "/FI", not_self.as_str()];
+    let image = format!("IMAGENAME eq {}", APP.exe);
+    let filters = ["/FI", image.as_str(), "/FI", not_self.as_str()];
 
     let still_running = || {
-        run_hidden("tasklist", &filters).is_some_and(|out| out.to_lowercase().contains("nectar.exe"))
+        run_hidden("tasklist", &filters).is_some_and(|out| out.to_lowercase().contains(&APP.exe.to_lowercase()))
     };
 
     let _ = run_hidden("taskkill", &filters);
@@ -99,20 +99,22 @@ fn stop_running_nectar() {
     }
 }
 
+/// The app was force-killed: bring the taskbar back with the user's own auto-hide setting.
 fn restore_taskbar_if_left_hidden() {
-    let Ok(appdata) = std::env::var("APPDATA") else { return };
-    let flag: PathBuf = Path::new(&appdata).join("com.kua8.nectar").join("taskbar_hidden.flag");
-    if flag.exists() {
-        crate::utils::set_taskbar_visibility(true, true);
-        let _ = std::fs::remove_file(&flag);
+    if let Some(flag) = crate::identity::taskbar_marker() {
+        crate::utils::restore_from_marker(&flag);
     }
 }
 
 fn remove_shortcuts(all_users: bool) {
     let mut lnks = Vec::new();
-    if let Some(d) = start_menu_programs_dir(all_users) { lnks.push(d.join("Nectar.lnk")); }
-    if let Some(d) = legacy_start_menu_dir(all_users) { lnks.push(d.join("Nectar.lnk")); }
-    if let Some(d) = desktop_dir(all_users) { lnks.push(d.join("Nectar.lnk")); }
+    let restore = format!("Restore Windows taskbar ({}).lnk", APP.display);
+    if let Some(d) = start_menu_programs_dir(all_users) {
+        lnks.push(d.join(APP.shortcut));
+        lnks.push(d.join(&restore));
+    }
+    if let Some(d) = legacy_start_menu_dir(all_users) { lnks.push(d.join(APP.shortcut)); }
+    if let Some(d) = desktop_dir(all_users) { lnks.push(d.join(APP.shortcut)); }
     for lnk in lnks {
         let _ = std::fs::remove_file(lnk);
     }
@@ -121,21 +123,32 @@ fn remove_shortcuts(all_users: bool) {
 fn remove_registry(all_users: bool) {
     unsafe {
         let root = if all_users { HKEY_LOCAL_MACHINE } else { HKEY_CURRENT_USER };
-        let subkey_w = wide(UNINSTALL_SUBKEY);
+        let subkey_w = wide(&crate::identity::uninstall_subkey());
         let _ = RegDeleteTreeW(root, PCWSTR(subkey_w.as_ptr()));
-        let install_key = wide(r"Software\kua8\nectar");
+        let install_key = wide(APP.install_key);
         let _ = RegDeleteTreeW(root, PCWSTR(install_key.as_ptr()));
 
         let run_key = wide(r"Software\Microsoft\Windows\CurrentVersion\Run");
         let approved_key = wide(r"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run");
-        let value = wide("nectar");
+        // tauri-plugin-autostart names the Run value after the product.
+        let value = wide(APP.product);
         let _ = RegDeleteKeyValueW(HKEY_CURRENT_USER, PCWSTR(run_key.as_ptr()), PCWSTR(value.as_ptr()));
         let _ = RegDeleteKeyValueW(HKEY_CURRENT_USER, PCWSTR(approved_key.as_ptr()), PCWSTR(value.as_ptr()));
     }
 }
 
-// Files Nectar itself puts in the install folder (the payload is just nectar.exe)
-const APP_FILES: &[&str] = &["nectar.exe", "uninstall.exe", ".install-scope"];
+// Files the app itself puts in the install folder. libunwind.dll only exists in older
+// hand-copied installs; the release exe links it statically.
+fn app_files() -> Vec<String> {
+    vec![
+        APP.exe.to_string(),
+        format!("{}.old", APP.exe),
+        "uninstall.exe".into(),
+        ".install-scope".into(),
+        "WebView2Loader.dll".into(),
+        "libunwind.dll".into(),
+    ]
+}
 
 // True when the folder belongs to Nectar alone and can be removed as a whole
 fn is_dedicated_install_dir(dir: &Path) -> bool {
@@ -182,7 +195,7 @@ fn remove_dir_command(install_dir: &Path, run_once: &str) -> String {
 
 fn remove_app_files_command(install_dir: &Path, run_once: &str) -> String {
     let dir = install_dir.to_string_lossy().replace('\'', "''");
-    let paths: Vec<String> = APP_FILES
+    let paths: Vec<String> = app_files()
         .iter()
         .map(|f| install_dir.join(f).to_string_lossy().replace('\'', "''"))
         .collect();
@@ -204,21 +217,44 @@ fn remove_app_files_command(install_dir: &Path, run_once: &str) -> String {
     )
 }
 
+/// The NSIS setup runs the uninstaller with `_?=<dir>` before a reinstall and then waits for the
+/// main exe to be gone.
+fn from_setup() -> bool {
+    std::env::args().skip(1).any(|a| a.starts_with("_?="))
+}
+
+/// Reinstall over this install: stop the app and give the taskbar back, then move the main exe
+/// aside so setup can write the new one. Settings, hooks, task and registry stay; setup rewrites
+/// the registry and the next start deletes the `.old` file.
+fn run_for_setup(install_dir: &Path) {
+    stop_running_nectar();
+    restore_taskbar_if_left_hidden();
+    let exe = install_dir.join(APP.exe);
+    let old = install_dir.join(format!("{}.old", APP.exe));
+    let _ = std::fs::remove_file(&old);
+    let _ = std::fs::rename(&exe, &old);
+}
+
 pub fn run() {
     let Ok(exe) = std::env::current_exe() else { return };
     let Some(install_dir) = exe.parent().map(Path::to_path_buf) else { return };
+
+    if from_setup() {
+        run_for_setup(&install_dir);
+        return;
+    }
 
     let all_users = crate::uninstall_registry::install_scope(&install_dir).unwrap_or(false);
 
     if all_users && !is_elevated() {
         if !relaunch_elevated(&exe) {
-            message("Nectar was installed for all users, so uninstalling it needs administrator permission.", MB_OK | MB_ICONINFORMATION);
+            message(&format!("{} was installed for all users, so uninstalling it needs administrator permission.", APP.display), MB_OK | MB_ICONINFORMATION);
         }
         return;
     }
 
     if message(
-        "Uninstall Nectar?\n\nThis removes the app and its shortcuts. Your settings are kept in case you reinstall.",
+        &format!("Uninstall {}?\n\nThis removes the app and its shortcuts. Your settings are kept in case you reinstall.", APP.display),
         MB_YESNO | MB_ICONQUESTION,
     ) != IDYES
     {
@@ -227,12 +263,16 @@ pub fn run() {
 
     stop_running_nectar();
     restore_taskbar_if_left_hidden();
-    if let Ok(appdata) = std::env::var("APPDATA") {
-        crate::notifications::restore_banners(&Path::new(&appdata).join("com.kua8.nectar"));
+    if let Some(dir) = crate::identity::data_dir() {
+        crate::notifications::restore_banners(&dir);
     }
+    // Hooks and the status line point at this exe; a chained user status line comes back.
+    crate::agent_api::set_hooks(false);
+    crate::startup::delete_task();
     remove_shortcuts(all_users);
     remove_registry(all_users);
     // Phone link keys are secrets bound to this install; they are not kept like settings.
+    #[cfg(feature = "phone-link")]
     crate::phone_link::delete_all_secrets();
 
     let dedicated = is_dedicated_install_dir(&install_dir);
@@ -258,14 +298,14 @@ pub fn run() {
 
     if spawned.is_err() {
         let text = if dedicated {
-            format!("Nectar was unregistered, but its folder couldn't be removed automatically. You can delete it yourself:\n\n{}", install_dir.display())
+            format!("{} was unregistered, but its folder couldn't be removed automatically. You can delete it yourself:\n\n{}", APP.display, install_dir.display())
         } else {
-            format!("Nectar was unregistered, but its files couldn't be removed automatically. You can delete {} yourself from:\n\n{}", APP_FILES.join(", "), install_dir.display())
+            format!("{} was unregistered, but its files couldn't be removed automatically. You can delete {} yourself from:\n\n{}", APP.display, app_files().join(", "), install_dir.display())
         };
         message(&text, MB_OK | MB_ICONINFORMATION);
         return;
     }
-    message("Nectar has been uninstalled.", MB_OK | MB_ICONINFORMATION);
+    message(&format!("{} has been uninstalled.", APP.display), MB_OK | MB_ICONINFORMATION);
 }
 
 #[cfg(test)]
@@ -287,8 +327,10 @@ mod tests {
     #[test]
     fn shared_folder_cleanup_only_targets_app_files() {
         let cmd = remove_app_files_command(Path::new(r"D:\Apps"), r"HKCU:\RunOnce");
-        assert!(cmd.contains(r"'D:\Apps\nectar.exe'"));
+        assert!(cmd.contains(&format!(r"'D:\Apps\{}'", APP.exe)));
         assert!(cmd.contains(r"'D:\Apps\uninstall.exe'"));
+        assert!(cmd.contains(r"'D:\Apps\WebView2Loader.dll'"));
+        assert!(cmd.contains(r"'D:\Apps\libunwind.dll'"));
         assert!(!cmd.contains("-Recurse"));
         assert!(!cmd.contains("rd /s"));
     }

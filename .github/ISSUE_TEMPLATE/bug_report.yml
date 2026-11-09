@@ -1,5 +1,5 @@
 name: Bug report
-description: Something in Nectar isn't working the way it should
+description: Something in Better Nectar isn't working the way it should
 title: "[Bug]: "
 labels: ["bug"]
 body:
@@ -7,7 +7,7 @@ body:
     attributes:
       value: |
         Thanks for taking the time to report this. The more detail you give, the faster it can be fixed.
-        Please search [existing issues](https://github.com/kua8/Nectar/issues) first in case it's already reported.
+        Please search [existing issues](https://github.com/vekilberke/better-nectar/issues) first in case it's already reported.
 
   - type: textarea
     id: what-happened
@@ -24,7 +24,7 @@ body:
       label: Steps to reproduce
       description: Numbered steps that trigger the problem, starting from a fresh launch if possible.
       placeholder: |
-        1. Open Nectar
+        1. Open Better Nectar
         2. Move the mouse over the notch
         3. ...
     validations:
@@ -33,7 +33,7 @@ body:
   - type: dropdown
     id: area
     attributes:
-      label: Which part of Nectar?
+      label: Which part of Better Nectar?
       options:
         - Dock
         - Notch
@@ -54,7 +54,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: Nectar version
+      label: Better Nectar version
       description: Shown in Settings › About.
       placeholder: "1.3.1"
     validations:
@@ -73,14 +73,14 @@ body:
     id: displays
     attributes:
       label: Monitor setup
-      description: Only needed for display, dock or notch problems. Number of monitors, resolution, scaling %, and whether Nectar is set to one monitor or all monitors.
+      description: Only needed for display, dock or notch problems. Number of monitors, resolution, scaling %, and whether Better Nectar is set to one monitor or all monitors.
       placeholder: "2 monitors, 1920x1080 at 100% and 2560x1440 at 150%, All Monitors on"
 
   - type: textarea
     id: diagnostics
     attributes:
       label: Diagnostics
-      description: Required. In Settings › About, click **Copy Diagnostics** and paste the result here. It includes the Nectar version, Windows build, monitors and recent log, so we don't have to guess. If Nectar won't open, say so here.
+      description: Required. In Settings › About, click **Copy Diagnostics** and paste the result here. It includes the Better Nectar version, Windows build, monitors and recent log, so we don't have to guess. If Better Nectar won't open, say so here.
       render: text
     validations:
       required: true
@@ -98,5 +98,5 @@ body:
       options:
         - label: I searched existing issues and this hasn't been reported
           required: true
-        - label: I'm on the latest version of Nectar
+        - label: I'm on the latest version of Better Nectar
           required: true

@@ -214,9 +214,14 @@ pub fn line_command(exe: &str) -> String {
     }
 }
 
+/// `<this build's exe> statusline`, so another Nectar install's line is never taken for ours.
 fn is_our_command(command: &str) -> bool {
-    let c = command.trim().to_ascii_lowercase();
-    ["nectar.exe statusline", "nectar.exe' statusline", "nectar.exe\" statusline"].iter().any(|end| c.ends_with(end))
+    const SUFFIX: &str = " statusline";
+    let c = command.trim();
+    if !c.to_ascii_lowercase().ends_with(SUFFIX) {
+        return false;
+    }
+    crate::identity::is_our_exe(&c[..c.len() - SUFFIX.len()])
 }
 
 fn is_ours(line: &Value) -> bool {
@@ -477,8 +482,12 @@ mod tests {
     fn our_command_uses_forward_slashes_and_quotes_spaces() {
         assert_eq!(line_command("C:\\Users\\a.b\\AppData\\Local\\Programs\\Nectar\\nectar.exe"), "C:/Users/a.b/AppData/Local/Programs/Nectar/nectar.exe statusline");
         assert_eq!(line_command("C:\\Program Files\\Nectar\\nectar.exe"), "'C:/Program Files/Nectar/nectar.exe' statusline");
-        assert!(is_our_command(&line_command("C:\\Program Files\\Nectar\\nectar.exe")));
+        assert!(is_our_command(&line_command(&format!("C:\\Program Files\\Nectar\\{}", exe()))));
         assert!(!is_our_command("powershell -NoProfile -File ~/.claude/statusline-command.ps1"));
+    }
+
+    fn exe() -> &'static str {
+        crate::identity::APP.exe
     }
 
     fn settings(line: Option<Value>) -> Map<String, Value> {
@@ -492,14 +501,14 @@ mod tests {
 
     #[test]
     fn user_line_is_chained_kept_and_restored() {
-        let ours = line_command("C:\\N\\nectar.exe");
+        let ours = line_command(&format!("C:\\N\\{}", exe()));
         let user = serde_json::json!({ "type": "command", "command": "powershell -File ~/.claude/s.ps1", "padding": 1, "refreshInterval": 5 });
         let mut map = settings(Some(user.clone()));
 
         assert_eq!(sync_status_line(&mut map, Some(&ours), None), Chain::Save(user.clone()));
         assert_eq!(map["statusLine"], serde_json::json!({ "type": "command", "command": ours, "padding": 1, "refreshInterval": 5 }));
 
-        let moved = line_command("C:\\M\\nectar.exe");
+        let moved = line_command(&format!("C:\\M\\{}", exe()));
         assert_eq!(sync_status_line(&mut map, Some(&moved), Some(user.clone())), Chain::Keep);
         assert_eq!(map["statusLine"]["command"], moved);
 
@@ -510,7 +519,7 @@ mod tests {
 
     #[test]
     fn no_user_line_means_ours_alone_and_removal_leaves_none() {
-        let ours = line_command("C:\\N\\nectar.exe");
+        let ours = line_command(&format!("C:\\N\\{}", exe()));
         let mut map = settings(None);
         assert_eq!(sync_status_line(&mut map, Some(&ours), None), Chain::Clear);
         assert_eq!(map["statusLine"]["command"], ours);
@@ -558,9 +567,11 @@ mod tests {
 
     #[test]
     fn our_command_detection_is_case_and_space_tolerant() {
-        assert!(is_our_command("  C:/X/Nectar.EXE statusline  "));
-        assert!(!is_our_command("C:/X/nectar.exe statusline --other"));
-        assert!(!is_our_command("echo nectar.exe statusline-ish"));
+        assert!(is_our_command(&format!("  C:/X/{} statusline  ", exe().to_uppercase())));
+        assert!(!is_our_command(&format!("C:/X/{} statusline --other", exe())));
+        assert!(!is_our_command(&format!("echo {} statusline-ish", exe())));
+        let other = if exe() == crate::identity::LEGACY.exe { crate::identity::SHARED.exe } else { crate::identity::LEGACY.exe };
+        assert!(!is_our_command(&format!("C:/X/{other} statusline")), "another Nectar install's line");
     }
 
     fn usage(five: Option<(f64, u64)>, seven: Option<(f64, u64)>) -> Usage {
@@ -601,8 +612,8 @@ mod tests {
         assert_eq!(line_command("C:\\Users\\A&B\\Nectar\\nectar.exe"), "'C:/Users/A&B/Nectar/nectar.exe' statusline");
         assert_eq!(line_command("C:\\Users\\O'Neil $x\\nectar.exe"), "'C:/Users/O'\\''Neil $x/nectar.exe' statusline");
         assert_eq!(line_command("C:\\Users\\Çağrı\\nectar.exe"), "C:/Users/Çağrı/nectar.exe statusline");
-        assert!(is_our_command(&line_command("C:\\Users\\A(1)!\\nectar.exe")));
-        assert!(is_our_command("\"C:/Program Files/Nectar/nectar.exe\" statusline"));
+        assert!(is_our_command(&line_command(&format!("C:\\Users\\A(1)!\\{}", exe()))));
+        assert!(is_our_command(&format!("\"C:/Program Files/Nectar/{}\" statusline", exe())));
     }
 
     #[test]

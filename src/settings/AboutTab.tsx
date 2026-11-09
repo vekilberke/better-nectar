@@ -4,8 +4,17 @@ import { emit } from "@tauri-apps/api/event";
 import { Compass, Download, FlaskConical, RefreshCw, FileDown, Upload, RotateCcw, Trash2, ClipboardCopy, FolderOpen, Crosshair, Image as ImageIcon } from "lucide-react";
 import { SettingRow } from "./SettingRow";
 import { useT } from "../i18n";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { APP_NAME } from "../buildFlags";
 import sonderNotice from "../../third_party/sonder-cat/NOTICE?raw";
 import sonderLicense from "../../third_party/sonder-cat/LICENSE?raw";
+
+const REPO_URL = "https://github.com/vekilberke/better-nectar";
+
+function open(e: React.MouseEvent, url: string) {
+  e.preventDefault();
+  openUrl(url).catch(() => { });
+}
 
 interface AboutTabProps {
   appVersion: string;
@@ -190,8 +199,8 @@ export function AboutTab({
   return (
     <div className="about-tab-container">
       <div className="about-header">
-        <img src="/nectar.png" className="about-logo" alt="Nectar Logo" />
-        <h1 className="about-title">Nectar</h1>
+        <img src="/nectar.png" className="about-logo" alt={`${APP_NAME} logo`} />
+        <h1 className="about-title">{APP_NAME}</h1>
         <p className="about-version">{t("about.version", { version: appVersion || "—" })}</p>
         <p className="about-version">{t("about.credit.cat")}</p>
         <details className="about-notices">
@@ -300,6 +309,12 @@ export function AboutTab({
 
       <div className="about-footer">
         <p>{t("about.footer")}</p>
+        <p className="about-legal">
+          {t("about.license")}{" "}
+          <a href={`${REPO_URL}/blob/main/LICENSE`} onClick={(e) => open(e, `${REPO_URL}/blob/main/LICENSE`)}>{t("about.license.link")}</a>
+          {" · "}
+          <a href={`${REPO_URL}/blob/main/THIRD_PARTY_LICENSES.md`} onClick={(e) => open(e, `${REPO_URL}/blob/main/THIRD_PARTY_LICENSES.md`)}>{t("about.thirdParty")}</a>
+        </p>
       </div>
     </div>
   );

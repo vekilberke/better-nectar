@@ -1679,9 +1679,9 @@ pub(crate) mod tests {
 
     /// Pairs a simulated phone and returns it with the engine and host.
     pub fn paired(perms: Perms) -> (Engine, TestHost, Phone) {
-        let mut eng = Engine::new(Box::new(MemoryDevices::default()), "MY-PC");
+        let mut eng = Engine::new(Box::new(MemoryDevices::default()), "TEST-PC");
         let mut host = TestHost::default();
-        let start = eng.start_pairing("https://vekilberke.github.io/nectar-phone/", "qziazuduzrdqnnwdlxqb", NOW);
+        let start = eng.start_pairing("https://example.github.io/phone/", "abcdefghijklmnopqrst", NOW);
         let pp = PhonePairing::from_qr(&start.url, UID);
         let seen = eng.on_broadcast(&mut host, &start.pair_topic, "hello", &pp.hello("Galaxy S26"), NOW + 1000);
         assert_eq!(seen, vec![Action::Send { topic: start.pair_topic.clone(), event: "seen", payload: json!({}) }]);
@@ -2028,7 +2028,7 @@ pub(crate) mod tests {
         phone.apply_rekey(ep);
         cmd(&mut eng, &mut host, &mut phone, json!({"t":"rekeyed","ep":ep}), at + 2000);
         // Nectar restarts: a new engine over the same records, with no memory of seen sids.
-        let mut eng = Engine::new(Box::new(MemoryDevices(eng.devices.clone())), "MY-PC");
+        let mut eng = Engine::new(Box::new(MemoryDevices(eng.devices.clone())), "TEST-PC");
         connect(&mut eng, &mut host, &mut phone, at + 60_000);
         assert_eq!(eng.devices[0].keys.superseded[0].ep, 0);
         let out = eng.on_broadcast(&mut host, &phone.topic.clone(), "hs1", &captured, at + 90_000);
@@ -2739,7 +2739,7 @@ pub(crate) mod tests {
         eng.transfer_finished(&mut host, &a.fid, Ok(None), NOW + 500);
         assert_eq!(host.clip_fids.get(&id), Some(&vec![a.fid.clone()]), "kept across restarts");
 
-        let mut eng = Engine::new(Box::new(MemoryDevices(eng.devices.clone())), "MY-PC");
+        let mut eng = Engine::new(Box::new(MemoryDevices(eng.devices.clone())), "TEST-PC");
         let b = upload_jobs(&eng.send_clip("after restart", &mut host, NOW + 60_000)).pop().unwrap();
         assert_ne!(b.fid, a.fid);
         assert_eq!(eng.transfer_finished(&mut host, &b.fid, Ok(None), NOW + 61_000), vec![clip_discard(&phone, &a.fid)]);
@@ -2916,7 +2916,7 @@ pub(crate) mod tests {
         let id = eng.devices()[0].id.clone();
         let a = upload_jobs(&eng.send_clip("before restart", &mut host, NOW)).pop().unwrap();
         eng.transfer_finished(&mut host, &a.fid, Ok(None), NOW + 100);
-        let mut eng = Engine::new(Box::new(MemoryDevices(eng.devices.clone())), "MY-PC");
+        let mut eng = Engine::new(Box::new(MemoryDevices(eng.devices.clone())), "TEST-PC");
         assert_eq!(discards(&eng.drop_clips(&mut host)), vec![a.fid.clone()]);
         assert!(host.clip_fids.get(&id).is_none_or(|f| f.is_empty()));
         assert!(eng.drop_clips(&mut host).is_empty());

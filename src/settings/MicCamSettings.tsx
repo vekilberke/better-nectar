@@ -4,14 +4,17 @@ import { Keyboard, Mic } from "lucide-react";
 import { SettingRow } from "./SettingRow";
 import { ShortcutRecorder } from "./ShortcutRecorder";
 import { useT } from "../i18n";
+import { PHONE_LINK } from "../buildFlags";
 
 /** Same default as privacy.rs DEFAULT_HOTKEY; an empty value turns meeting mode off. */
 export const DEFAULT_MIC_MUTE_HOTKEY = "Win+Ctrl+K";
+/** privacy.rs HOTKEY_ON_BY_DEFAULT: on only in the owner's own build. */
+const INITIAL_MIC_MUTE_HOTKEY = PHONE_LINK ? DEFAULT_MIC_MUTE_HOTKEY : "";
 
 export function MicCamSettings() {
   const t = useT();
   const [indicator, setIndicator] = useState(() => localStorage.getItem("nectar-mic-cam-indicator") !== "false");
-  const [hotkey, setHotkey] = useState(() => localStorage.getItem("nectar-mic-mute-hotkey") ?? DEFAULT_MIC_MUTE_HOTKEY);
+  const [hotkey, setHotkey] = useState(() => localStorage.getItem("nectar-mic-mute-hotkey") ?? INITIAL_MIC_MUTE_HOTKEY);
 
   const toggleIndicator = () => {
     const next = !indicator;

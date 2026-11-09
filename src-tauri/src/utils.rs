@@ -8,7 +8,6 @@ use windows::Win32::Graphics::Imaging::{IWICImagingFactory, CLSID_WICImagingFact
 use base64::{Engine as _, engine::general_purpose};
 use std::path::PathBuf;
 use std::sync::OnceLock;
-use tauri::Manager;
 
 pub fn resolve_shortcut(path: &str) -> Option<(String, String)> {
     unsafe {
@@ -42,8 +41,11 @@ static TASKBAR_MARKER: OnceLock<PathBuf> = OnceLock::new();
 
 /// Point the crash-recovery marker at this user's app config dir (called from setup).
 pub fn init_taskbar_marker(app: &tauri::AppHandle) {
-    if let Ok(dir) = app.path().app_config_dir() {
-        let _ = TASKBAR_MARKER.set(dir.join("taskbar_hidden.flag"));
+    if app.config().identifier != crate::identity::APP.identifier {
+        crate::diagnostics::log(&format!("identity mismatch: tauri config {} vs built-in {}", app.config().identifier, crate::identity::APP.identifier));
+    }
+    if let Some(path) = crate::identity::taskbar_marker() {
+        let _ = TASKBAR_MARKER.set(path);
     }
 }
 
@@ -126,19 +128,54 @@ fn marker_contents(original_state: i32) -> String {
 }
 
 fn parse_marker_state(contents: &str) -> Option<i32> {
-    contents.trim().strip_prefix("abstate=")?.parse().ok()
+    contents.trim().strip_prefix("abstate=")?.parse().ok().filter(|state| *state >= 0)
+}
+
+const ABS_ALWAYSONTOP: i32 = 2;
+
+/// ABM state to give back for a marker: the saved one, else always on top without auto-hide.
+fn marker_restore_state(contents: Option<&str>) -> i32 {
+    contents.and_then(parse_marker_state).unwrap_or(ABS_ALWAYSONTOP)
+}
+
+/// Shows the taskbar with the state saved in `path` and deletes the marker. Works without Tauri
+/// (guard process, `restore-taskbar` CLI, uninstaller). False when there was no marker.
+pub fn restore_from_marker(path: &std::path::Path) -> bool {
+    let Ok(contents) = std::fs::read_to_string(path) else { return false };
+    ORIGINAL_TASKBAR_STATE.store(marker_restore_state(Some(&contents)), std::sync::atomic::Ordering::Relaxed);
+    set_taskbar_visibility(true, true);
+    let _ = std::fs::remove_file(path);
+    true
+}
+
+/// Shows the taskbar always on top without auto-hide (no marker to say what the user had).
+pub fn show_taskbar_default() {
+    ORIGINAL_TASKBAR_STATE.store(ABS_ALWAYSONTOP, std::sync::atomic::Ordering::Relaxed);
+    set_taskbar_visibility(true, true);
 }
 
 /// Restores the taskbar after a session died with it hidden, using the state saved in the marker.
 pub fn restore_taskbar_after_crash() {
-    let saved = TASKBAR_MARKER
-        .get()
-        .and_then(|p| std::fs::read_to_string(p).ok())
-        .and_then(|contents| parse_marker_state(&contents));
-    if let Some(state) = saved {
-        ORIGINAL_TASKBAR_STATE.store(state, std::sync::atomic::Ordering::Relaxed);
+    if let Some(path) = TASKBAR_MARKER.get() {
+        restore_from_marker(path);
     }
-    set_taskbar_visibility(true, true);
+}
+
+/// Logoff or shutdown with the taskbar hidden: put the user's ABM state back (Explorer persists
+/// it) but keep the marker, so the next start still knows the original.
+pub fn restore_taskbar_state_for_session_end() {
+    use windows::Win32::UI::Shell::{SHAppBarMessage, ABM_SETSTATE, APPBARDATA};
+    if !crate::state::NATIVE_TASKBAR_HIDDEN.load(std::sync::atomic::Ordering::Relaxed) {
+        return;
+    }
+    let original = ORIGINAL_TASKBAR_STATE.load(std::sync::atomic::Ordering::Relaxed);
+    let state = if original >= 0 { original } else { ABS_ALWAYSONTOP };
+    let mut abd = APPBARDATA {
+        cbSize: std::mem::size_of::<APPBARDATA>() as u32,
+        lParam: windows::Win32::Foundation::LPARAM(state as isize),
+        ..Default::default()
+    };
+    unsafe { SHAppBarMessage(ABM_SETSTATE, &mut abd) };
 }
 
 pub fn secondary_taskbars() -> Vec<windows::Win32::Foundation::HWND> {
@@ -516,6 +553,52 @@ pub fn get_setting_str(_app: &tauri::AppHandle, key: &str) -> Option<String> {
     let cache = crate::state::SETTINGS_CACHE.get()?;
     let guard = cache.lock().ok()?;
     guard.get(key)?.as_str().map(|s| s.to_string())
+}
+
+/// Settings import and the first-start migration drop every key with this prefix (phone link
+/// pairing belongs to one install).
+pub const PHONE_SETTING_PREFIX: &str = "nectar-phone-";
+
+/// Removes `nectar-phone-*` keys from an imported settings file; returns the removed keys.
+pub fn strip_import(settings: &mut std::collections::HashMap<String, serde_json::Value>) -> Vec<String> {
+    let mut removed: Vec<String> = settings.keys().filter(|k| k.starts_with(PHONE_SETTING_PREFIX)).cloned().collect();
+    removed.sort();
+    for k in &removed {
+        settings.remove(k);
+    }
+    removed
+}
+
+/// Keys a migrated settings file never carries: turning them on rewrites `~/.claude/settings.json`,
+/// possibly over another Nectar's hooks, so the user opts in again.
+#[cfg_attr(feature = "phone-link", allow(dead_code))]
+const MIGRATION_DROPS: &[&str] = &["nectar-agent-api", "nectar-claude-usage"];
+
+/// First start of a build with a new identity: copy only `settings.json` from the upstream
+/// folder, without phone and Claude keys. Never overwrites. True when it copied.
+#[cfg_attr(feature = "phone-link", allow(dead_code))]
+pub fn migrate_settings_from(old_dir: &std::path::Path, new_dir: &std::path::Path) -> bool {
+    let target = new_dir.join("settings.json");
+    if old_dir == new_dir || target.exists() {
+        return false;
+    }
+    let Ok(text) = std::fs::read_to_string(old_dir.join("settings.json")) else { return false };
+    let Ok(mut settings) = serde_json::from_str::<std::collections::HashMap<String, serde_json::Value>>(&text) else { return false };
+    strip_import(&mut settings);
+    for key in MIGRATION_DROPS {
+        settings.remove(*key);
+    }
+    let Ok(out) = serde_json::to_string_pretty(&settings) else { return false };
+    std::fs::create_dir_all(new_dir).is_ok() && std::fs::write(&target, out).is_ok()
+}
+
+#[cfg(not(feature = "phone-link"))]
+pub fn migrate_legacy_settings() {
+    if let (Some(old), Some(new)) = (crate::identity::legacy_data_dir(), crate::identity::data_dir()) {
+        if migrate_settings_from(&old, &new) {
+            crate::diagnostics::log("settings: copied settings.json from the upstream Nectar folder");
+        }
+    }
 }
 
 /// Re-assert HWND_TOPMOST without activating the window.
@@ -943,6 +1026,71 @@ unsafe fn wic_bitmap_to_base64(factory: &IWICImagingFactory, bitmap: &windows::W
 #[cfg(test)]
 mod tests {
     use super::expand_env_vars;
+
+    #[test]
+    fn import_drops_every_phone_link_key() {
+        use serde_json::json;
+        let mut s: std::collections::HashMap<String, serde_json::Value> = [
+            ("nectar-phone-link".to_string(), json!("true")),
+            ("nectar-phone-link-devices".to_string(), json!("[]")),
+            ("nectar-scale".to_string(), json!("1")),
+        ]
+        .into_iter()
+        .collect();
+        assert_eq!(super::strip_import(&mut s), vec!["nectar-phone-link", "nectar-phone-link-devices"]);
+        assert_eq!(s.len(), 1);
+        assert!(s.contains_key("nectar-scale"));
+    }
+
+    fn temp_dir(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("nectar-test-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn migration_copies_once_without_phone_or_claude_keys() {
+        let root = temp_dir("migrate");
+        let (old, new) = (root.join("old"), root.join("new"));
+        std::fs::create_dir_all(&old).unwrap();
+        std::fs::write(
+            old.join("settings.json"),
+            r#"{"nectar-scale":"1.2","nectar-phone-link":"true","nectar-agent-api":"true","nectar-claude-usage":"true"}"#,
+        )
+        .unwrap();
+        std::fs::write(old.join("agent.json"), "{}").unwrap();
+        assert!(super::migrate_settings_from(&old, &new));
+        let copied: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(new.join("settings.json")).unwrap()).unwrap();
+        assert_eq!(copied, serde_json::json!({ "nectar-scale": "1.2" }));
+        assert!(!new.join("agent.json").exists());
+
+        std::fs::write(new.join("settings.json"), r#"{"nectar-scale":"2"}"#).unwrap();
+        assert!(!super::migrate_settings_from(&old, &new), "never overwrites");
+        assert_eq!(std::fs::read_to_string(new.join("settings.json")).unwrap(), r#"{"nectar-scale":"2"}"#);
+        assert!(!super::migrate_settings_from(&root.join("missing"), &root.join("other")));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn marker_state_parsing() {
+        use super::marker_restore_state as state;
+        assert_eq!(state(Some("abstate=0")), 0);
+        assert_eq!(state(Some("abstate=1")), 1);
+        assert_eq!(state(Some("abstate=2\r\n")), 2);
+        assert_eq!(state(Some("1")), 2, "old marker: always on top, no auto-hide");
+        assert_eq!(state(Some("abstate=-1")), 2);
+        assert_eq!(state(Some("garbage")), 2);
+        assert_eq!(state(Some("")), 2);
+        assert_eq!(state(None), 2);
+    }
+
+    #[test]
+    fn missing_marker_restores_nothing() {
+        let root = temp_dir("marker");
+        assert!(!super::restore_from_marker(&root.join("taskbar_hidden.flag")));
+        let _ = std::fs::remove_dir_all(&root);
+    }
 
     #[test]
     fn env_expansion() {

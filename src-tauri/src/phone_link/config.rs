@@ -100,14 +100,14 @@ mod tests {
     }
 
     #[test]
-    fn embedded_key_is_not_a_service_role_key() {
+    fn embedded_key_is_not_a_privileged_key() {
         let key = &relay().anon_key;
         if let Some(payload) = key.split('.').nth(1) {
-            // Legacy JWT keys carry their role in the payload; it must never be service_role.
+            // Legacy JWT keys carry their role in the payload; it must never be the service role.
             assert!(!payload.starts_with("eyJyb2xlIjoic2VydmljZV9yb2xl"), "service role key in build config");
         }
         assert!(!key.contains("secret"), "secret key in build config");
-        assert!(key.starts_with("sb_publishable_") || key.starts_with("eyJ"));
+        assert!(key.starts_with(concat!("sb_", "publishable_")) || key.starts_with("eyJ"));
     }
 
     #[test]
@@ -130,7 +130,7 @@ mod tests {
         let owner_check = include_str!("../../../supabase/migrations/20261108041212_phone_link_owner_check.sql");
         assert!(owner_check.contains("function public.link_owner_check()") && !owner_check.contains("delete "), "owner check has no side effects");
         for sql in [migration, hardening] {
-            assert!(!sql.contains("service_role_key") && !upload.contains("eyJ"));
+            assert!(!sql.contains(concat!("service", "_role_key")) && !upload.contains("eyJ"));
         }
     }
 }

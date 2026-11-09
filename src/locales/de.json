@@ -282,7 +282,7 @@
   "about.hitbox": "Klicks auf Dock und Notch loggen",
   "about.hitbox.desc": "Einschalten, ein paar Sekunden über Dock und Notch fahren, dann die Diagnose kopieren. Wird beim Neustart zurückgesetzt",
   "about.danger.group": "Gefahrenbereich",
-  "about.footer": "Mit ❤️ gemacht von kua8",
+  "about.footer": "Basiert auf Nectar von kua8, geändert von vekilberke",
   "calsync.guide.google.step1": "Öffne Google Kalender im Web (calendar.google.com).",
   "calsync.guide.google.step2": "Fahre in der linken Liste über den Kalender, klicke auf das Drei-Punkte-Menü, dann auf Einstellungen und Freigabe.",
   "calsync.guide.google.step3": "Scrolle zu Kalender integrieren und kopiere die geheime Adresse im iCal-Format.",

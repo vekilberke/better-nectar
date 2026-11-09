@@ -10,7 +10,7 @@ use windows::Win32::System::Threading::{
     PROCESS_CREATION_FLAGS,
 };
 
-const TASK_NAME: &str = "Nectar";
+const TASK_NAME: &str = crate::identity::APP.task;
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 const BOOST_LIMIT: Duration = Duration::from_secs(20);
 
@@ -104,7 +104,7 @@ fn create_task() -> bool {
     for unit in xml.encode_utf16() {
         bytes.extend_from_slice(&unit.to_le_bytes());
     }
-    let path = std::env::temp_dir().join("nectar-logon-task.xml");
+    let path = std::env::temp_dir().join(format!("{}-logon-task.xml", crate::identity::APP.exe.trim_end_matches(".exe")));
     if std::fs::write(&path, bytes).is_err() {
         return false;
     }
@@ -113,7 +113,7 @@ fn create_task() -> bool {
     ok
 }
 
-fn delete_task() {
+pub(crate) fn delete_task() {
     if task_exists() {
         schtasks(&["/delete", "/tn", TASK_NAME, "/f"]);
     }

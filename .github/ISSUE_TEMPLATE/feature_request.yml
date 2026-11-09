@@ -1,12 +1,12 @@
 name: Feature request
-description: Suggest an idea or improvement for Nectar
+description: Suggest an idea or improvement for Better Nectar
 title: "[Feature]: "
 labels: ["enhancement"]
 body:
   - type: markdown
     attributes:
       value: |
-        Ideas are welcome. Please check [existing issues](https://github.com/kua8/Nectar/issues) first so we don't duplicate a request.
+        Ideas are welcome. Please check [existing issues](https://github.com/vekilberke/better-nectar/issues) first so we don't duplicate a request.
 
   - type: textarea
     id: problem
@@ -28,7 +28,7 @@ body:
   - type: dropdown
     id: area
     attributes:
-      label: Which part of Nectar?
+      label: Which part of Better Nectar?
       options:
         - Dock
         - Notch
